@@ -6,6 +6,7 @@ backend/data/activity.log
 .env
 .env.*
 !.env.example
+!frontend/.env.offline
 
 # Python
 __pycache__/

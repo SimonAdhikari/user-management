@@ -9,7 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from config import Settings
-from exceptions import AuthenticationError, UserManagementError
+from exceptions import AuthenticationError, TwoFactorRequiredError, UserManagementError
 from services import UserManager
 from utilities import RateLimiter, SessionStore
 
@@ -41,6 +41,16 @@ class UserCreateRequest(BaseModel):
 class LoginRequest(BaseModel):
     user_id: str = Field(min_length=3, max_length=20)
     password: str = Field(min_length=1, max_length=128)
+    totp_code: str | None = Field(default=None, min_length=6, max_length=6)
+
+
+class TwoFactorConfirmRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=6)
+
+
+class KycRequest(BaseModel):
+    document_type: str = Field(min_length=1, max_length=40)
+    document_number: str = Field(min_length=4, max_length=40)
 
 
 def request_data(request: BaseModel) -> dict:
@@ -131,6 +141,9 @@ def login(request: LoginRequest, http_request: Request, response: Response):
         response.set_cookie("sums_session", token, max_age=settings.session_minutes * 60, httponly=True,
                             secure=settings.cookie_secure, samesite="strict", path="/")
         return {"expires_at": expires.isoformat(), "user": user.to_dict()}
+    except TwoFactorRequiredError:
+        # Password accepted — the client must resubmit with a TOTP code.
+        raise api_error(Exception("Two-factor authentication code required."), status.HTTP_401_UNAUTHORIZED)
     except AuthenticationError:
         # Avoid account enumeration and do not expose lock state.
         raise api_error(Exception("Invalid user ID or password."), status.HTTP_401_UNAUTHORIZED)
@@ -177,3 +190,53 @@ def privileges(user=Depends(current_user)):
 @app.get("/reports/activity", tags=["reports"])
 def report(_: object = Depends(require_roles("Administrator", "Security Analyst"))):
     return manager.activity_report()
+
+
+@app.post("/2fa/setup", tags=["two-factor"])
+def twofa_setup(user=Depends(current_user)):
+    """Begin TOTP enrolment. Returns the secret and an otpauth:// URI for QR scanning."""
+    return manager.begin_2fa_setup(user.user_id)
+
+
+@app.post("/2fa/confirm", tags=["two-factor"])
+def twofa_confirm(request: TwoFactorConfirmRequest, user=Depends(current_user)):
+    """Activate 2FA after the user proves they can generate a valid code."""
+    try:
+        updated = manager.confirm_2fa_setup(user.user_id, request.code)
+        return {"message": "Two-factor authentication enabled.", "totp_enabled": updated.totp_enabled}
+    except ValueError as error:
+        raise api_error(error)
+
+
+@app.post("/2fa/disable", tags=["two-factor"])
+def twofa_disable(request: TwoFactorConfirmRequest, user=Depends(current_user)):
+    """Disable 2FA; a valid current code is required as proof of possession."""
+    if not user.verify_totp(request.code):
+        raise api_error(Exception("Invalid authentication code."), status.HTTP_401_UNAUTHORIZED)
+    manager.disable_2fa(user.user_id)
+    return {"message": "Two-factor authentication disabled.", "totp_enabled": False}
+
+
+@app.post("/kyc/submit", tags=["kyc"])
+def kyc_submit(request: KycRequest, user=Depends(current_user)):
+    """Submit KYC documents to verify identity."""
+    try:
+        updated = manager.submit_kyc(user.user_id, request.document_type, request.document_number)
+        return {"message": "KYC verification completed.", "kyc_status": updated.kyc_status}
+    except ValueError as error:
+        raise api_error(error)
+
+
+@app.get("/kyc/status", tags=["kyc"])
+def kyc_status(user=Depends(current_user)):
+    """Check current KYC status."""
+    return {"kyc_status": user.kyc_status, "document_type": user.kyc_document_type}
+
+
+@app.get("/identify/{user_id}", tags=["identity"])
+def identify_user(user_id: str, _: object = Depends(require_roles("Administrator", "Security Analyst"))):
+    """Re-identify a known user from the plain-text registry."""
+    try:
+        return manager.identify_user(user_id)
+    except UserNotFoundError as error:
+        raise api_error(error, status.HTTP_404_NOT_FOUND)

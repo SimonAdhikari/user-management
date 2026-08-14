@@ -25,5 +25,13 @@ class AuthenticationError(UserManagementError):
     """Raised when authentication fails or an account is locked."""
 
 
+class TwoFactorRequiredError(AuthenticationError):
+    """Raised when the password is correct but a TOTP code is still required."""
+
+    def __init__(self, message: str = "Two-factor authentication code required.", pending_token: str = ""):
+        super().__init__(message)
+        self.pending_token = pending_token
+
+
 class UserNotFoundError(UserManagementError):
     """Raised when no record matches a requested user ID."""

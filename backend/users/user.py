@@ -19,6 +19,11 @@ class User:
         self.__password_hash, self.__salt = Validator.hash_password(password)
         self._failed_login_attempts = 0
         self._is_locked = False
+        self._kyc_status = "unverified"
+        self._kyc_document_type = None
+        self._kyc_document_number = None
+        self._totp_secret = None
+        self._totp_enabled = False
 
     @property
     def user_id(self) -> str: return self._user_id
@@ -47,6 +52,55 @@ class User:
 
     @property
     def failed_login_attempts(self) -> int: return self._failed_login_attempts
+
+    @property
+    def kyc_status(self) -> str: return self._kyc_status
+
+    @property
+    def kyc_document_type(self) -> str | None: return self._kyc_document_type
+
+    def submit_kyc(self, document_type: str, document_number: str) -> None:
+        """Register KYC document details and mark the identity as verified."""
+        if not document_type or not document_type.strip():
+            raise ValueError("KYC document type is required.")
+        if not document_number or len(document_number.strip()) < 4:
+            raise ValueError("KYC document number must be at least 4 characters.")
+        self._kyc_document_type = document_type.strip()
+        self._kyc_document_number = document_number.strip()
+        self._kyc_status = "verified"
+
+    def revoke_kyc(self) -> None:
+        self._kyc_status = "unverified"
+        self._kyc_document_type = None
+        self._kyc_document_number = None
+
+    @property
+    def totp_enabled(self) -> bool: return self._totp_enabled
+
+    def begin_totp_enrolment(self) -> tuple[str, str]:
+        """Generate a pending secret and return it with the QR provisioning URI."""
+        from utilities import TotpService
+        self._totp_secret = TotpService.generate_secret()
+        self._totp_enabled = False
+        return self._totp_secret, TotpService.provisioning_uri(self._totp_secret, self._email)
+
+    def confirm_totp_enrolment(self, code: str) -> None:
+        """Activate 2FA once the user proves they can generate valid codes."""
+        from utilities import TotpService
+        if not self._totp_secret:
+            raise ValueError("Start 2FA setup first.")
+        if not TotpService.verify(self._totp_secret, code):
+            raise ValueError("Invalid authentication code.")
+        self._totp_enabled = True
+
+    def disable_totp(self) -> None:
+        self._totp_secret = None
+        self._totp_enabled = False
+
+    def verify_totp(self, code: str) -> bool:
+        from utilities import TotpService
+        return bool(self._totp_enabled and self._totp_secret
+                    and TotpService.verify(self._totp_secret, code))
 
     def check_password(self, password_attempt: str) -> bool:
         return Validator.verify_password(password_attempt, self.__password_hash, self.__salt)
@@ -79,11 +133,15 @@ class User:
         """Safe public representation; intentionally excludes password information."""
         return {"user_id": self.user_id, "name": self.name, "email": self.email,
                 "role": self.role, "is_locked": self.is_locked,
-                "failed_login_attempts": self.failed_login_attempts}
+                "failed_login_attempts": self.failed_login_attempts,
+                "kyc_status": self._kyc_status, "kyc_document_type": self._kyc_document_type,
+                "totp_enabled": self._totp_enabled}
 
     def to_storage_dict(self) -> dict:
         data = self.to_dict()
-        data.update({"password_hash": self.__password_hash, "salt": self.__salt})
+        data.update({"password_hash": self.__password_hash, "salt": self.__salt,
+                     "kyc_document_number": self._kyc_document_number,
+                     "totp_secret": self._totp_secret})
         return data
 
     @classmethod
@@ -99,6 +157,11 @@ class User:
             obj.__password_hash, obj.__salt = Validator.hash_password(data["password"])
         obj._failed_login_attempts = data.get("failed_login_attempts", 0)
         obj._is_locked = data.get("is_locked", False)
+        obj._kyc_status = data.get("kyc_status", "unverified")
+        obj._kyc_document_type = data.get("kyc_document_type")
+        obj._kyc_document_number = data.get("kyc_document_number")
+        obj._totp_secret = data.get("totp_secret")
+        obj._totp_enabled = data.get("totp_enabled", False)
         return obj
 
     def __str__(self) -> str:

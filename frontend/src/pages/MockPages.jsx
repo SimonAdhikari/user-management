@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react'
 import { 
   Activity, ShieldAlert, BarChart3, Clock, 
-  Network, Zap, Database, Download, CheckCircle, XCircle 
+  Network, Zap, Database, Download, CheckCircle, XCircle, Search 
 } from 'lucide-react'
+import { api, errorMessage } from '../services/api'
 
 const PageWrapper = ({ title, subtitle, children }) => (
   <div className="page-container">
@@ -67,36 +69,59 @@ export const RolesPolicies = () => (
   </PageWrapper>
 )
 
-export const ActivityLogs = () => (
-  <PageWrapper title="Activity Logs" subtitle="System-wide audit trail of all actions.">
-    <div className="glass-panel" style={{ padding: '2rem', minHeight: '400px' }}>
-      <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ borderBottom: '2px solid var(--card-border)' }}>
-            <th style={{ padding: '1rem' }}>Timestamp</th>
-            <th style={{ padding: '1rem' }}>User</th>
-            <th style={{ padding: '1rem' }}>Action</th>
-            <th style={{ padding: '1rem' }}>Status</th>
-          </tr>
-        </thead>
-        <tbody style={{ color: 'var(--text-secondary)' }}>
-          <tr>
-            <td style={{ padding: '1rem' }}>2026-08-10 10:45</td>
-            <td style={{ padding: '1rem' }}>admin@example.com</td>
-            <td style={{ padding: '1rem' }}>Update firewall rules</td>
-            <td style={{ padding: '1rem', color: 'var(--success)' }}>Success</td>
-          </tr>
-          <tr>
-            <td style={{ padding: '1rem' }}>2026-08-10 09:12</td>
-            <td style={{ padding: '1rem' }}>system</td>
-            <td style={{ padding: '1rem' }}>Database backup</td>
-            <td style={{ padding: '1rem', color: 'var(--success)' }}>Success</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </PageWrapper>
-)
+export const ActivityLogs = () => {
+  const [report, setReport] = useState(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.get('/reports/activity')
+      .then(res => setReport(res.data))
+      .catch(err => setError(errorMessage(err)))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const events = report?.recent_events ? [...report.recent_events].reverse() : []
+
+  return (
+    <PageWrapper title="Activity Logs" subtitle="System-wide audit trail of all actions.">
+      {error && <div className="alert alert-error">{error}</div>}
+      {report && (
+        <div className="users-grid" style={{ marginBottom: '1.5rem' }}>
+          <StatCard title="Total Users" value={report.total_users} icon={<BarChart3 />} color="#6366f1" />
+          <StatCard title="Locked Accounts" value={report.locked_accounts} icon={<ShieldAlert />} color="#ef4444" />
+          {Object.entries(report.by_role).map(([role, count], i) => (
+            <StatCard key={role} title={role + 's'} value={count} icon={<Activity />} color={['#10b981', '#f59e0b', '#3b82f6'][i % 3]} />
+          ))}
+        </div>
+      )}
+      <div className="glass-panel" style={{ padding: '2rem', minHeight: '400px' }}>
+        <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid var(--card-border)' }}>
+              <th style={{ padding: '1rem' }}>Timestamp</th>
+              <th style={{ padding: '1rem' }}>User</th>
+              <th style={{ padding: '1rem' }}>Action</th>
+              <th style={{ padding: '1rem' }}>Details</th>
+            </tr>
+          </thead>
+          <tbody style={{ color: 'var(--text-secondary)' }}>
+            {loading && <tr><td colSpan="4" style={{ padding: '1rem' }}>Loading audit trail…</td></tr>}
+            {!loading && !events.length && !error && <tr><td colSpan="4" style={{ padding: '1rem' }}>No activity recorded yet.</td></tr>}
+            {events.map((event, i) => (
+              <tr key={i} style={{ borderBottom: '1px solid var(--card-border)' }}>
+                <td style={{ padding: '1rem' }}>{event.timestamp}</td>
+                <td style={{ padding: '1rem' }}>{event.user_id}</td>
+                <td style={{ padding: '1rem' }}>{event.action}</td>
+                <td style={{ padding: '1rem' }}>{event.details || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </PageWrapper>
+  )
+}
 
 export const LoginAttempts = () => (
   <PageWrapper title="Login Attempts" subtitle="Monitor authentication success and failures.">

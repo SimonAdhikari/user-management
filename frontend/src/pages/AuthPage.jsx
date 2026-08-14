@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ArrowRight, KeyRound, LockKeyhole, ShieldCheck, Sparkles, UserPlus } from 'lucide-react'
 import { api, errorMessage } from '../services/api'
 import { useAuth } from '../context/AuthContext'
+import AnimatedLogo from '../components/AnimatedLogo'
 
 const emptySetup = { user_id: '', name: '', email: '', password: '', setup_key: '', role: 'Administrator' }
 
@@ -38,7 +39,7 @@ export default function AuthPage() {
 
   return <main className="auth-shell">
     <section className="auth-brand">
-      <div className="brand-mark"><ShieldCheck size={30} /></div>
+      <AnimatedLogo size={52} iconSize={30} className="brand-mark" />
       <span className="eyebrow"><Sparkles size={14} /> SECURITY, SIMPLIFIED</span>
       <h1>Manage access with confidence.</h1>
       <p>A focused workspace for your institute’s people, permissions, and security activity.</p>
@@ -51,7 +52,7 @@ export default function AuthPage() {
     <section className="auth-card-wrap">
       <div className="auth-card">
         <div className="auth-card-heading">
-          <div className="mini-logo"><ShieldCheck size={19} /></div>
+          <AnimatedLogo size={38} iconSize={19} className="mini-logo" />
           <h2>{isLogin ? 'Welcome back' : 'Secure your workspace'}</h2>
           <p>{isLogin ? 'Sign in to continue to your security console.' : 'Create the first administrator account.'}</p>
         </div>

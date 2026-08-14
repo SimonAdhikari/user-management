@@ -3,6 +3,7 @@ from .custom_exceptions import (
     DuplicateUserError,
     InvalidEmailError,
     InvalidUserIDError,
+    TwoFactorRequiredError,
     UserManagementError,
     UserNotFoundError,
     WeakPasswordError,
@@ -10,6 +11,6 @@ from .custom_exceptions import (
 
 __all__ = [
     "AuthenticationError", "DuplicateUserError", "InvalidEmailError",
-    "InvalidUserIDError", "UserManagementError", "UserNotFoundError",
-    "WeakPasswordError",
+    "InvalidUserIDError", "TwoFactorRequiredError", "UserManagementError",
+    "UserNotFoundError", "WeakPasswordError",
 ]

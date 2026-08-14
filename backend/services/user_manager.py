@@ -5,15 +5,16 @@ from difflib import SequenceMatcher
 import re
 import secrets
 
-from exceptions import AuthenticationError, DuplicateUserError, UserNotFoundError
+from exceptions import AuthenticationError, DuplicateUserError, TwoFactorRequiredError, UserNotFoundError
 from users import Administrator, SecurityAnalyst, User
-from utilities import ActivityLogger, JsonUserStorage
+from utilities import ActivityLogger, IdentityRegistry, JsonUserStorage
 
 
 class UserManager:
     def __init__(self, data_file: str | Path, activity_file: str | Path) -> None:
         self.storage = JsonUserStorage(data_file)
         self.logger = ActivityLogger(activity_file)
+        self.registry = IdentityRegistry(Path(data_file).with_name("user_registry.txt"))
         self._users: dict[str, User] = {}
         self._lock = RLock()
         self.load()
@@ -73,8 +74,26 @@ class UserManager:
             user = self._make_user(user_id, name, email, password, role)
             self._users[user.user_id] = user
             self.save()
+            self.registry.record(user)
             self.logger.log("USER_CREATED", user.user_id, f"role={user.role}")
             return user
+
+    def submit_kyc(self, user_id: str, document_type: str, document_number: str) -> User:
+        """Verify a user's identity and record it in the registry for future terms."""
+        with self._lock:
+            user = self.get_user(user_id)
+            user.submit_kyc(document_type, document_number)
+            self.save()
+            self.registry.record(user)
+            self.logger.log("KYC_VERIFIED", user.user_id, f"doc={document_type}")
+            return user
+
+    def identify_user(self, user_id: str) -> dict:
+        """Re-identify a known user from the plain-text registry."""
+        record = self.registry.lookup(user_id)
+        if not record:
+            raise UserNotFoundError(f"No identity record found for '{user_id}'.")
+        return record
 
     def get_user(self, user_id: str) -> User:
         try:
@@ -82,7 +101,7 @@ class UserManager:
         except KeyError as error:
             raise UserNotFoundError(f"No user found with ID '{user_id}'.") from error
 
-    def authenticate(self, user_id: str, password: str) -> User:
+    def authenticate(self, user_id: str, password: str, totp_code: str | None = None) -> User:
         with self._lock:
             # Return the same response for unknown and wrong-password accounts.
             try:
@@ -97,8 +116,41 @@ class UserManager:
                 self.save()
                 self.logger.log("LOGIN_FAILED", user_id, f"attempts={user.failed_login_attempts}")
                 raise AuthenticationError("Invalid credentials.")
+            # Password is correct — enforce the second factor when enabled.
+            if user.totp_enabled:
+                if not totp_code:
+                    self.logger.log("LOGIN_2FA_REQUIRED", user_id)
+                    raise TwoFactorRequiredError(pending_token=secrets.token_urlsafe(16))
+                if not user.verify_totp(totp_code):
+                    self.logger.log("LOGIN_2FA_FAILED", user_id)
+                    raise AuthenticationError("Invalid credentials.")
             self.save()
             self.logger.log("LOGIN_SUCCESS", user_id)
+            return user
+
+    def begin_2fa_setup(self, user_id: str) -> dict:
+        """Start TOTP enrolment; returns the secret and QR provisioning URI."""
+        with self._lock:
+            user = self.get_user(user_id)
+            secret, uri = user.begin_totp_enrolment()
+            self.save()
+            self.logger.log("2FA_SETUP_STARTED", user_id)
+            return {"secret": secret, "provisioning_uri": uri}
+
+    def confirm_2fa_setup(self, user_id: str, code: str) -> User:
+        with self._lock:
+            user = self.get_user(user_id)
+            user.confirm_totp_enrolment(code)
+            self.save()
+            self.logger.log("2FA_ENABLED", user_id)
+            return user
+
+    def disable_2fa(self, user_id: str) -> User:
+        with self._lock:
+            user = self.get_user(user_id)
+            user.disable_totp()
+            self.save()
+            self.logger.log("2FA_DISABLED", user_id)
             return user
 
     def unlock_user(self, user_id: str) -> User:
