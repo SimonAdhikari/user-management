@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Hub - Download for Mobile</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            color: #cbd5e1;
+            margin-bottom: 30px;
+        }
+
+        .download-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        @media (max-width: 768px) {
+            .download-options {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .option-card {
+            background: rgba(15, 23, 42, 0.8);
+            border: 2px solid #334155;
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .option-card:hover {
+            border-color: #3b82f6;
+            background: rgba(15, 23, 42, 0.95);
+            transform: translateY(-5px);
+        }
+
+        .option-card h2 {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .icon {
+            font-size: 2rem;
+        }
+
+        .qr-code {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            display: inline-block;
+        }
+
+        #qr-android, #qr-ios {
+            display: flex;
+            justify-content: center;
+        }
+
+        .instructions {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: left;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .instructions ol {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+
+        .instructions li {
+            margin-bottom: 8px;
+            color: #cbd5e1;
+        }
+
+        .step-number {
+            color: #3b82f6;
+            font-weight: bold;
+        }
+
+        .direct-link {
+            display: inline-block;
+            background: #3b82f6;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            margin-top: 15px;
+            transition: background 0.3s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .direct-link:hover {
+            background: #2563eb;
+        }
+
+        .direct-link.secondary {
+            background: #64748b;
+            margin-left: 10px;
+        }
+
+        .direct-link.secondary:hover {
+            background: #475569;
+        }
+
+        .store-section {
+            background: rgba(15, 23, 42, 0.8);
+            border: 2px solid #334155;
+            border-radius: 16px;
+            padding: 30px;
+            margin-top: 40px;
+        }
+
+        .store-section h3 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #cbd5e1;
+        }
+
+        .store-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        @media (max-width: 600px) {
+            .store-buttons {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .download-options {
+                gap: 20px;
+            }
+
+            .option-card {
+                padding: 20px;
+            }
+
+            .direct-link.secondary {
+                margin-left: 0;
+                margin-top: 10px;
+                width: 100%;
+            }
+        }
+
+        .badge {
+            background: #10b981;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            display: inline-block;
+            margin-top: 10px;
+        }
+
+        .copy-btn {
+            background: #475569;
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-left: 5px;
+            transition: background 0.3s ease;
+        }
+
+        .copy-btn:hover {
+            background: #64748b;
+        }
+
+        .url-display {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #475569;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 15px 0;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #cbd5e1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .success-message {
+            background: #10b981;
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            display: none;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 Social Hub Mobile</h1>
+            <p>Download and install Social Hub on your Android or iOS device</p>
+        </div>
+
+        <div class="download-options">
+            <!-- Android -->
+            <div class="option-card">
+                <h2><span class="icon">🤖</span> Android</h2>
+                <p style="color: #94a3b8; margin-bottom: 20px;">Install as PWA or scan QR code</p>
+                
+                <div class="qr-code" id="qr-android"></div>
+                
+                <button class="direct-link" onclick="openLink('https://november-pub-pmid-ahead.trycloudflare.com')">
+                    📲 Open on Android
+                </button>
+                
+                <div class="instructions">
+                    <strong>📋 Installation Steps:</strong>
+                    <ol>
+                        <li>Open the link on your Android phone</li>
+                        <li>Tap <strong>⋮</strong> (menu) or <strong>⋮⋮</strong> (more)</li>
+                        <li>Select <strong>"Add to Home Screen"</strong> or <strong>"Install App"</strong></li>
+                        <li>Tap <strong>"Add"</strong> or <strong>"Install"</strong></li>
+                        <li>Social Hub will appear on your home screen!</li>
+                    </ol>
+                    <span class="badge">✓ Works Offline</span>
+                </div>
+            </div>
+
+            <!-- iOS -->
+            <div class="option-card">
+                <h2><span class="icon">🍎</span> iOS</h2>
+                <p style="color: #94a3b8; margin-bottom: 20px;">Install as PWA or scan QR code</p>
+                
+                <div class="qr-code" id="qr-ios"></div>
+                
+                <button class="direct-link" onclick="openLink('https://november-pub-pmid-ahead.trycloudflare.com')">
+                    📲 Open on iPhone/iPad
+                </button>
+                
+                <div class="instructions">
+                    <strong>📋 Installation Steps:</strong>
+                    <ol>
+                        <li>Open the link on your iPhone/iPad</li>
+                        <li>Tap the <strong>Share</strong> button</li>
+                        <li>Scroll and tap <strong>"Add to Home Screen"</strong></li>
+                        <li>Customize the name (optional)</li>
+                        <li>Tap <strong>"Add"</strong> in the top right</li>
+                        <li>Social Hub will appear on your home screen!</li>
+                    </ol>
+                    <span class="badge">✓ Works Offline</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Direct Link -->
+        <div style="background: rgba(59, 130, 246, 0.1); border: 2px solid #3b82f6; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 40px;">
+            <h3 style="margin-bottom: 15px;">🔗 Direct Link</h3>
+            <div class="url-display">
+                <span id="url-text">https://november-pub-pmid-ahead.trycloudflare.com</span>
+                <button class="copy-btn" onclick="copyToClipboard()">Copy</button>
+            </div>
+            <div class="success-message" id="success-msg">✓ Link copied to clipboard!</div>
+        </div>
+
+        <!-- App Store Publishing -->
+        <div class="store-section">
+            <h3>🎯 Publishing to App Stores</h3>
+            <p style="margin-bottom: 20px; color: #cbd5e1;">
+                Want a native app on Google Play or Apple App Store? We can help you publish:
+            </p>
+            <div class="store-buttons">
+                <button class="direct-link" onclick="showInfo('google-play')">
+                    📊 Google Play Store
+                </button>
+                <button class="direct-link" onclick="showInfo('apple-app-store')">
+                    🍎 Apple App Store
+                </button>
+            </div>
+            <div id="store-info" style="background: rgba(30, 41, 59, 0.8); border-left: 4px solid #8b5cf6; padding: 15px; border-radius: 8px; margin-top: 20px; display: none;">
+                <p style="color: #cbd5e1; line-height: 1.8;">
+                    <strong>Requirements:</strong><br>
+                    ✓ Developer account ($25 one-time for Google Play)<br>
+                    ✓ Developer account ($99/year for Apple)<br>
+                    ✓ App signing certificate & provisioning profiles<br>
+                    ✓ Privacy policy & terms of service<br>
+                    <br>
+                    <strong>Recommended Tools:</strong><br>
+                    • React Native / Expo (wrap React app)<br>
+                    • Capacitor (web to native bridge)<br>
+                    • Cordova (legacy support)<br>
+                    • Flutter (native performance)<br>
+                    <br>
+                    For PWA, most users can "Add to Home Screen" which works just like an app store download!
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize QR Codes
+        new QRCode(document.getElementById('qr-android'), {
+            text: 'https://november-pub-pmid-ahead.trycloudflare.com',
+            width: 200,
+            height: 200,
+            colorDark: '#0f172a',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+        });
+
+        new QRCode(document.getElementById('qr-ios'), {
+            text: 'https://november-pub-pmid-ahead.trycloudflare.com',
+            width: 200,
+            height: 200,
+            colorDark: '#0f172a',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+        });
+
+        function openLink(url) {
+            window.location.href = url;
+        }
+
+        function copyToClipboard() {
+            const text = document.getElementById('url-text').textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const msg = document.getElementById('success-msg');
+                msg.style.display = 'block';
+                setTimeout(() => {
+                    msg.style.display = 'none';
+                }, 3000);
+            });
+        }
+
+        function showInfo(store) {
+            const info = document.getElementById('store-info');
+            info.style.display = info.style.display === 'none' ? 'block' : 'none';
+        }
+    </script>
+</body>
+</html>
