@@ -6,5 +6,6 @@ from .rate_limiter import RateLimiter
 from .storage import JsonUserStorage
 from .totp import TotpService
 from .validator import Validator
+from .post_storage import JsonPostStorage
 
-__all__ = ["ActivityLogger", "IdentityRegistry", "JsonUserStorage", "RateLimiter", "SessionStore", "TotpService", "Validator"]
+__all__ = ["ActivityLogger", "IdentityRegistry", "JsonPostStorage", "JsonUserStorage", "RateLimiter", "SessionStore", "TotpService", "Validator"]

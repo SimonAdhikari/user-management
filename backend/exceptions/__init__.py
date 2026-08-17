@@ -3,6 +3,7 @@ from .custom_exceptions import (
     DuplicateUserError,
     InvalidEmailError,
     InvalidUserIDError,
+    PostNotFoundError,
     TwoFactorRequiredError,
     UserManagementError,
     UserNotFoundError,

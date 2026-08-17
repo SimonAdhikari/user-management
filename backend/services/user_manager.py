@@ -128,6 +128,16 @@ class UserManager:
             self.logger.log("LOGIN_SUCCESS", user_id)
             return user
 
+    def authenticate_by_email(self, email: str, password: str, totp_code: str | None = None) -> User:
+        """Look up the account by email and delegate to the standard authenticate flow."""
+        with self._lock:
+            normalised = email.strip().lower()
+            user = next((u for u in self._users.values() if u.email.lower() == normalised), None)
+            if user is None:
+                self.logger.log("LOGIN_FAILED", normalised, "Unknown email")
+                raise AuthenticationError("Invalid credentials.")
+        return self.authenticate(user.user_id, password, totp_code)
+
     def begin_2fa_setup(self, user_id: str) -> dict:
         """Start TOTP enrolment; returns the secret and QR provisioning URI."""
         with self._lock:

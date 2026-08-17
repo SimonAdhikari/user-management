@@ -1,254 +1,70 @@
-import { useEffect, useState } from 'react'
-import { 
-  Activity, ShieldAlert, BarChart3, Clock, 
-  Network, Zap, Database, Download, CheckCircle, XCircle, Search 
-} from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Activity, CheckCircle2, ClipboardList, Copy, KeyRound, ShieldCheck, UsersRound } from 'lucide-react'
 import { api, errorMessage } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
-const PageWrapper = ({ title, subtitle, children }) => (
-  <div className="page-container">
-    <div className="page-header visual-page-header">
-      <div>
-        <span className="eyebrow">CYBER OPERATIONS</span>
-        <h2>{title}</h2>
-        <p>{subtitle}</p>
-      </div>
-      <div className="header-graphic" aria-hidden="true">
-        <div className="radar-core"><span></span></div>
-        <i></i><i></i><i></i>
-      </div>
-    </div>
-    {children}
+const PageHeader = ({ eyebrow = 'SECURE WORKSPACE', title, subtitle, children }) => (
+  <div className="page-header page-header-row">
+    <div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2><p>{subtitle}</p></div>{children}
   </div>
 )
 
-const StatCard = ({ title, value, icon, color }) => (
-  <div className="glass-panel stat-card visual-stat-card">
-    <div className="stat-icon" style={{ color: color, background: `${color}1A` }}>
-      {icon}
-    </div>
-    <div className="stat-content">
-      <h4>{title}</h4>
-      <h2>{value}</h2>
-    </div>
-    <div className="stat-spark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-  </div>
-)
+const Empty = ({ children }) => <div className="empty-state glass-panel">{children}</div>
 
-export const Dashboard = () => (
-  <PageWrapper title="Dashboard" subtitle="Overview of your Cyber Security Institute system.">
-    <div className="users-grid">
-      <StatCard title="Total Users" value="1,248" icon={<BarChart3 />} color="#6366f1" />
-      <StatCard title="Active Incidents" value="3" icon={<ShieldAlert />} color="#ef4444" />
-      <StatCard title="System Uptime" value="99.9%" icon={<Activity />} color="#10b981" />
-      <StatCard title="Network Load" value="45%" icon={<Network />} color="#f59e0b" />
-    </div>
-    <div className="dashboard-visual-grid">
-      <div className="glass-panel activity-orbit">
-        <div className="orbit-copy"><span className="eyebrow">LIVE DEFENCE</span><h3>Security posture <strong>Protected</strong></h3><p>All critical systems are operating within their secure baseline.</p></div>
-        <div className="orbit-art" aria-label="Security status visual"><div className="orbit-ring ring-one"></div><div className="orbit-ring ring-two"></div><div className="orbit-shield"><ShieldAlert size={34} /></div><span className="orbit-dot dot-one"></span><span className="orbit-dot dot-two"></span></div>
-      </div>
-      <div className="glass-panel activity-feed">
-        <div className="feed-title"><div><span className="eyebrow">AUDIT STREAM</span><h3>Recent activity</h3></div><span className="live-pill"><i /> LIVE</span></div>
-        <div className="timeline"><p><span className="timeline-icon ok"><CheckCircle size={14} /></span><b>Administrator signed in</b><small>just now</small></p><p><span className="timeline-icon warning"><ShieldAlert size={14} /></span><b>Access review completed</b><small>12 min ago</small></p><p><span className="timeline-icon ok"><Activity size={14} /></span><b>Nightly scan completed</b><small>2 hr ago</small></p></div>
-      </div>
-    </div>
-  </PageWrapper>
-)
-
-export const RolesPolicies = () => (
-  <PageWrapper title="Roles & Policies" subtitle="Manage RBAC (Role-Based Access Control) configuration.">
-    <div className="glass-panel" style={{ padding: '2rem' }}>
-      <h3 style={{ marginBottom: '1rem' }}>Active Policies</h3>
-      <ul style={{ listStyle: 'none', padding: 0 }}>
-        <li style={{ padding: '1rem', borderBottom: '1px solid var(--card-border)' }}><strong>Administrator:</strong> Full system access, CRUD on users, Configuration.</li>
-        <li style={{ padding: '1rem', borderBottom: '1px solid var(--card-border)' }}><strong>Security Analyst:</strong> Read-only logs, Execute Scans, Incident Reporting.</li>
-        <li style={{ padding: '1rem' }}><strong>Standard User:</strong> Profile access only.</li>
-      </ul>
-    </div>
-  </PageWrapper>
-)
-
-export const ActivityLogs = () => {
-  const [report, setReport] = useState(null)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    api.get('/reports/activity')
-      .then(res => setReport(res.data))
-      .catch(err => setError(errorMessage(err)))
-      .finally(() => setLoading(false))
-  }, [])
-
-  const events = report?.recent_events ? [...report.recent_events].reverse() : []
-
-  return (
-    <PageWrapper title="Activity Logs" subtitle="System-wide audit trail of all actions.">
-      {error && <div className="alert alert-error">{error}</div>}
-      {report && (
-        <div className="users-grid" style={{ marginBottom: '1.5rem' }}>
-          <StatCard title="Total Users" value={report.total_users} icon={<BarChart3 />} color="#6366f1" />
-          <StatCard title="Locked Accounts" value={report.locked_accounts} icon={<ShieldAlert />} color="#ef4444" />
-          {Object.entries(report.by_role).map(([role, count], i) => (
-            <StatCard key={role} title={role + 's'} value={count} icon={<Activity />} color={['#10b981', '#f59e0b', '#3b82f6'][i % 3]} />
-          ))}
-        </div>
-      )}
-      <div className="glass-panel" style={{ padding: '2rem', minHeight: '400px' }}>
-        <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid var(--card-border)' }}>
-              <th style={{ padding: '1rem' }}>Timestamp</th>
-              <th style={{ padding: '1rem' }}>User</th>
-              <th style={{ padding: '1rem' }}>Action</th>
-              <th style={{ padding: '1rem' }}>Details</th>
-            </tr>
-          </thead>
-          <tbody style={{ color: 'var(--text-secondary)' }}>
-            {loading && <tr><td colSpan="4" style={{ padding: '1rem' }}>Loading audit trail…</td></tr>}
-            {!loading && !events.length && !error && <tr><td colSpan="4" style={{ padding: '1rem' }}>No activity recorded yet.</td></tr>}
-            {events.map((event, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid var(--card-border)' }}>
-                <td style={{ padding: '1rem' }}>{event.timestamp}</td>
-                <td style={{ padding: '1rem' }}>{event.user_id}</td>
-                <td style={{ padding: '1rem' }}>{event.action}</td>
-                <td style={{ padding: '1rem' }}>{event.details || '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </PageWrapper>
-  )
+const formatTime = (value) => {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
-export const LoginAttempts = () => (
-  <PageWrapper title="Login Attempts" subtitle="Monitor authentication success and failures.">
-    <div className="users-grid">
-      <StatCard title="Successful Logins" value="1,042" icon={<CheckCircle />} color="#10b981" />
-      <StatCard title="Failed Attempts" value="87" icon={<XCircle />} color="#ef4444" />
-    </div>
-  </PageWrapper>
-)
+export function Dashboard() {
+  const { user } = useAuth()
+  const [report, setReport] = useState(null)
+  const [error, setError] = useState('')
 
-export const NetworkMonitor = () => (
-  <PageWrapper title="Network Monitor" subtitle="Real-time traffic and connection health.">
-    <div className="glass-panel" style={{ padding: '4rem', textAlign: 'center' }}>
-      <Network size={64} color="var(--primary)" style={{ marginBottom: '1rem' }} />
-      <h3>Network Status: Optimal</h3>
-      <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>No anomalous packets detected in the last 24 hours.</p>
-    </div>
-  </PageWrapper>
-)
+  useEffect(() => {
+    if (!['Administrator', 'Security Analyst'].includes(user?.role)) return
+    api.get('/reports/activity').then(({ data }) => setReport(data)).catch(err => setError(errorMessage(err)))
+  }, [user?.role])
 
-export const IncidentResponse = () => (
-  <PageWrapper title="Incident Response" subtitle="Manage and triage active security tickets.">
-    <div className="glass-panel" style={{ padding: '2rem' }}>
-      <h3>No Active Incidents</h3>
-      <p style={{ color: 'var(--text-secondary)' }}>All clear! You can click 'Create Ticket' if you notice suspicious behavior.</p>
-      <button className="btn" style={{ marginTop: '1rem' }}><Zap size={16} /> Create Ticket</button>
-    </div>
-  </PageWrapper>
-)
-
-export const ThreatIntel = () => (
-  <PageWrapper title="Threat Intelligence" subtitle="Live feed of global CVEs and vulnerabilities.">
-    <div className="glass-panel" style={{ padding: '2rem' }}>
-      <div className="alert alert-error"><strong>CRITICAL:</strong> CVE-2026-9999 - Zero-day vulnerability in common package. Patch immediately.</div>
-      <div className="alert" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#fcd34d', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
-        <strong>WARN:</strong> Increased phishing campaigns detected targeting educational sectors.
+  const events = report?.recent_events ? [...report.recent_events].reverse().slice(0, 5) : []
+  return <div className="page-container">
+    <PageHeader eyebrow="WELCOME BACK" title={`Hello, ${user?.name?.split(' ')[0] || 'there'}`} subtitle="Here is the current state of your secure workspace." />
+    {error && <div className="alert alert-error" role="alert">{error}</div>}
+    {report ? <>
+      <div className="metric-row">
+        <div className="metric-card"><UsersRound size={19} /><div><span>Registered users</span><strong>{report.total_users}</strong></div></div>
+        <div className="metric-card metric-safe"><CheckCircle2 size={19} /><div><span>Unlocked accounts</span><strong>{report.total_users - report.locked_accounts}</strong></div></div>
+        <div className="metric-card metric-admin"><ShieldCheck size={19} /><div><span>Locked accounts</span><strong>{report.locked_accounts}</strong></div></div>
       </div>
-    </div>
-  </PageWrapper>
-)
+      <section className="glass-panel activity-panel"><div className="section-heading"><span className="icon-chip"><Activity size={18} /></span><div><h3>Recent activity</h3><p>Latest events recorded by the audit log.</p></div></div>{events.length ? <div className="activity-list">{events.map((event, index) => <div className="activity-item" key={`${event.timestamp}-${index}`}><div className="activity-dot" /><div><strong>{event.action.replaceAll('_', ' ')}</strong><span>{event.user_id} {event.details ? `· ${event.details}` : ''}</span></div><time>{formatTime(event.timestamp)}</time></div>)}</div> : <p className="muted">No activity has been recorded yet.</p>}</section>
+    </> : <Empty><ClipboardList size={34} /><strong>{['Administrator', 'Security Analyst'].includes(user?.role) ? 'Loading workspace overview…' : 'Your account is ready'}</strong><span>{['Administrator', 'Security Analyst'].includes(user?.role) ? 'Fetching the latest audit summary.' : 'Use My security to protect your account with 2FA and identity verification.'}</span></Empty>}
+  </div>
+}
 
-export const VulnerabilityScans = () => (
-  <PageWrapper title="Vulnerability Scans" subtitle="Schedule and review system port/app scans.">
-    <div className="glass-panel" style={{ padding: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <div>
-        <h3>Last Scan: 2 hours ago</h3>
-        <p style={{ color: 'var(--success)' }}>0 Critical, 2 Low vulnerabilities found.</p>
-      </div>
-      <button className="btn"><Search size={16} /> Run Scan Now</button>
-    </div>
-  </PageWrapper>
-)
+export function ActivityLogs() {
+  const [report, setReport] = useState(null)
+  const [error, setError] = useState('')
+  useEffect(() => { api.get('/reports/activity').then(({ data }) => setReport(data)).catch(err => setError(errorMessage(err))) }, [])
+  const events = useMemo(() => report?.recent_events ? [...report.recent_events].reverse() : [], [report])
+  return <div className="page-container"><PageHeader title="Activity log" subtitle="A concise, read-only record of security-relevant actions." />{error && <div className="alert alert-error" role="alert">{error}</div>}<section className="glass-panel table-panel"><div className="section-heading"><span className="icon-chip"><Activity size={18} /></span><div><h3>Audit trail</h3><p>{report ? `${events.length} most recent events` : 'Loading audit events…'}</p></div></div>{events.length ? <div className="audit-table-wrap"><table className="audit-table"><thead><tr><th>When</th><th>Action</th><th>Account</th><th>Details</th></tr></thead><tbody>{events.map((event, index) => <tr key={`${event.timestamp}-${index}`}><td>{formatTime(event.timestamp)}</td><td><span className="event-label">{event.action.replaceAll('_', ' ')}</span></td><td><code>{event.user_id}</code></td><td>{event.details || '—'}</td></tr>)}</tbody></table></div> : !error && <p className="muted">No activity recorded yet.</p>}</section></div>
+}
 
-export const DataExport = () => (
-  <PageWrapper title="Data Export" subtitle="Download audit logs and user records (JSON/CSV).">
-    <div className="glass-panel" style={{ padding: '2rem' }}>
-      <h3>Generate Backup</h3>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Select the format you wish to export the system state in.</p>
-      <div style={{ display: 'flex', gap: '1rem' }}>
-        <button className="btn" style={{ background: '#10b981' }}><Database size={16} /> Export JSON</button>
-        <button className="btn" style={{ background: '#3b82f6' }}><Download size={16} /> Export CSV</button>
-      </div>
-    </div>
-  </PageWrapper>
-)
+export function MySecurity() {
+  const { user } = useAuth()
+  const [kyc, setKyc] = useState({ status: user?.kyc_status || 'unverified', document_type: user?.kyc_document_type || '' })
+  const [document, setDocument] = useState({ document_type: '', document_number: '' })
+  const [totp, setTotp] = useState(user?.totp_enabled)
+  const [setup, setSetup] = useState(null)
+  const [code, setCode] = useState('')
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState('')
+  const notify = (value) => { setError(''); setMessage(value) }
+  const request = async (action, task) => { setLoading(action); setError(''); setMessage(''); try { await task() } catch (err) { setError(errorMessage(err)) } finally { setLoading('') } }
+  const copy = async (value) => { try { await navigator.clipboard.writeText(value); notify('Copied to your clipboard.') } catch { setError('Copy is not available in this browser. Select the value and copy it manually.') } }
+  return <div className="page-container"><PageHeader title="My security" subtitle="Review your account, protect sign-in with 2FA, and manage identity verification." />{error && <div className="alert alert-error" role="alert">{error}</div>}{message && <div className="alert alert-success" role="status">{message}</div>}<div className="security-grid"><section className="glass-panel security-panel"><div className="section-heading"><span className="icon-chip"><ShieldCheck size={18} /></span><div><h3>Account details</h3><p>Information tied to your current session.</p></div></div><dl className="details-list"><div><dt>Name</dt><dd>{user?.name}</dd></div><div><dt>Email</dt><dd>{user?.email}</dd></div><div><dt>Role</dt><dd><span className="role-pill">{user?.role}</span></dd></div><div><dt>User key</dt><dd><code>{user?.user_id}</code></dd></div></dl></section><section className="glass-panel security-panel"><div className="section-heading"><span className="icon-chip"><KeyRound size={18} /></span><div><h3>Two-factor authentication</h3><p>{totp ? 'Two-factor authentication is enabled.' : 'Add an authenticator app for a stronger sign-in.'}</p></div></div>{!totp && !setup && <button className="btn" disabled={loading === 'setup'} onClick={() => request('setup', async () => { const { data } = await api.post('/2fa/setup'); setSetup(data) })}>{loading === 'setup' ? 'Preparing…' : 'Set up 2FA'}</button>}{setup && !totp && <div className="setup-box"><p>Add this secret to an authenticator app, then enter its six-digit code.</p><code>{setup.secret}</code><button className="icon-button" onClick={() => copy(setup.secret)} aria-label="Copy 2FA secret"><Copy size={16} /></button><label className="form-group">Verification code<input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" placeholder="123456" /></label><button className="btn" disabled={loading === 'confirm' || code.length !== 6} onClick={() => request('confirm', async () => { await api.post('/2fa/confirm', { code }); setTotp(true); setSetup(null); notify('Two-factor authentication is enabled.') })}>Confirm and enable</button></div>}{totp && <button className="btn btn-secondary" disabled={loading === 'disable'} onClick={() => request('disable', async () => { await api.post('/2fa/disable', { code: window.prompt('Enter your current six-digit authenticator code:') || '' }); setTotp(false); notify('Two-factor authentication is disabled.') })}>{loading === 'disable' ? 'Disabling…' : 'Disable 2FA'}</button>}</section><section className="glass-panel security-panel"><div className="section-heading"><span className="icon-chip"><CheckCircle2 size={18} /></span><div><h3>Identity verification</h3><p>Status: <strong className={kyc.status === 'verified' ? 'success-text' : ''}>{kyc.status}</strong>{kyc.document_type ? ` · ${kyc.document_type}` : ''}</p></div></div>{kyc.status !== 'verified' ? <form className="stack-form" onSubmit={e => { e.preventDefault(); request('kyc', async () => { const { data } = await api.post('/kyc/submit', document); setKyc({ status: data.kyc_status, document_type: document.document_type }); notify('Identity verification was submitted successfully.') }) }}><label className="form-group">Document type<select value={document.document_type} onChange={e => setDocument({ ...document, document_type: e.target.value })} required><option value="">Choose a document</option><option>Passport</option><option>National ID</option><option>Driving licence</option></select></label><label className="form-group">Document number<input value={document.document_number} onChange={e => setDocument({ ...document, document_number: e.target.value })} minLength="4" required /></label><button className="btn" disabled={loading === 'kyc'}>{loading === 'kyc' ? 'Submitting…' : 'Verify identity'}</button></form> : <p className="success-text">Your identity verification is complete.</p>}</section></div></div>
+}
 
-export const SecuritySettings = () => (
-  <PageWrapper title="Security Settings" subtitle="Configure 2FA, password expiration, and timeouts.">
-    <div className="glass-panel" style={{ padding: '2rem' }}>
-      <div className="form-group">
-        <label>Require 2FA for all Administrators?</label>
-        <select className="form-control" defaultValue="yes">
-          <option value="yes">Yes, Enforced</option>
-          <option value="no">No, Optional</option>
-        </select>
-      </div>
-      <div className="form-group">
-        <label>Session Timeout (Minutes)</label>
-        <input type="number" className="form-control" defaultValue="30" />
-      </div>
-      <button className="btn">Save Configuration</button>
-    </div>
-  </PageWrapper>
-)
-
-export const SystemConfig = () => (
-  <PageWrapper title="System Configuration" subtitle="Global environment variables and integrations.">
-    <div className="glass-panel" style={{ padding: '2rem' }}>
-      <p style={{ color: 'var(--text-secondary)' }}>System configurations are currently locked by the Super Admin.</p>
-    </div>
-  </PageWrapper>
-)
-
-export const MyProfile = () => (
-  <PageWrapper title="My Profile" subtitle="Manage your personal account settings.">
-    <div className="glass-panel" style={{ padding: '2rem', maxWidth: '500px' }}>
-      <div className="form-group">
-        <label>Name</label>
-        <input type="text" className="form-control" defaultValue="System Administrator" disabled />
-      </div>
-      <div className="form-group">
-        <label>Email</label>
-        <input type="email" className="form-control" defaultValue="admin@cyberinstitute.edu" disabled />
-      </div>
-      <button className="btn">Request Change</button>
-    </div>
-  </PageWrapper>
-)
-
-export const Support = () => (
-  <PageWrapper title="Help & Support" subtitle="Need assistance? We're here to help.">
-    <div className="glass-panel" style={{ padding: '2rem' }}>
-      <h3>Documentation</h3>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Read our quickstart guide to learn how to manage users effectively.</p>
-      <button className="btn" style={{ background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)' }}>Read Docs</button>
-    </div>
-  </PageWrapper>
-)
-
-export const About = () => (
-  <PageWrapper title="About Institute" subtitle="Information about the Cyber Security Institute.">
-    <div className="glass-panel" style={{ padding: '3rem', textAlign: 'center' }}>
-      <ShieldAlert size={64} color="var(--primary)" style={{ marginBottom: '1rem' }} />
-      <h2>Cyber Security Institute v2.0</h2>
-      <p style={{ color: 'var(--text-secondary)', marginTop: '1rem', maxWidth: '600px', margin: '1rem auto' }}>
-        This portal was built to manage robust security requirements, showcasing object-oriented principles, secure authentication handling, and modern frontend design patterns.
-      </p>
-    </div>
-  </PageWrapper>
-)
+export function Support() {
+  return <div className="page-container"><PageHeader title="Using the workspace" subtitle="A few practical steps for managing access safely." /><section className="glass-panel support-panel"><ol><li><strong>Create only necessary accounts.</strong> Use the least privileged role that fits the person’s work.</li><li><strong>Keep passwords temporary and strong.</strong> Share initial credentials through a secure, separate channel.</li><li><strong>Review the activity log regularly.</strong> Investigate unfamiliar sign-ins, lockouts, or account changes.</li><li><strong>Enable 2FA on your own account.</strong> It adds an important safeguard if a password is exposed.</li></ol></section></div>
+}

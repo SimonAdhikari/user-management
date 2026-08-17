@@ -1,7 +1,10 @@
 """Authenticated HTTP API. Deploy behind HTTPS and a reverse proxy in production."""
+import os
 import secrets
+from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+import httpx
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -9,7 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from config import Settings
-from exceptions import AuthenticationError, TwoFactorRequiredError, UserManagementError
+from exceptions import AuthenticationError, PostNotFoundError, TwoFactorRequiredError, UserManagementError
 from services import UserManager
 from utilities import RateLimiter, SessionStore
 
@@ -19,14 +22,25 @@ manager = UserManager(settings.data_dir / "users.json", settings.data_dir / "act
 sessions = SessionStore(settings.session_minutes)
 login_limiter = RateLimiter(limit=5, window_seconds=60)
 bearer = HTTPBearer(auto_error=False)
+STORAGE_SERVER_URL = os.getenv("STORAGE_SERVER_URL", "http://127.0.0.1:8001")
 app = FastAPI(title="Secure User Management API", version="1.0.0",
               docs_url="/docs" if settings.environment == "development" else None,
               redoc_url=None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True,
-                   allow_methods=["GET", "POST"], allow_headers=["Authorization", "Content-Type", "X-Setup-Key"])
+                   allow_methods=["GET", "POST", "DELETE"], allow_headers=["Authorization", "Content-Type", "X-Setup-Key"])
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
 if settings.environment == "production":
     app.add_middleware(HTTPSRedirectMiddleware)
+
+
+def _storage_request(method: str, path: str, **kwargs) -> httpx.Response:
+    """Forward a request to the dedicated post storage server."""
+    url = f"{STORAGE_SERVER_URL}{path}"
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            return client.request(method, url, **kwargs)
+    except httpx.RequestError as error:
+        raise HTTPException(status_code=503, detail=f"Storage server unavailable: {error}")
 
 
 class UserCreateRequest(BaseModel):
@@ -39,7 +53,7 @@ class UserCreateRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    user_id: str = Field(min_length=3, max_length=20)
+    email: str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=1, max_length=128)
     totp_code: str | None = Field(default=None, min_length=6, max_length=6)
 
@@ -51,6 +65,23 @@ class TwoFactorConfirmRequest(BaseModel):
 class KycRequest(BaseModel):
     document_type: str = Field(min_length=1, max_length=40)
     document_number: str = Field(min_length=4, max_length=40)
+
+
+class MediaItem(BaseModel):
+    url: str = Field(min_length=1, max_length=500)
+    kind: str = Field(min_length=1, max_length=10)
+    mime_type: str = Field(min_length=1, max_length=80)
+    filename: str = Field(default="", max_length=200)
+
+
+class PostCreateRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+    media: list[MediaItem] = Field(default_factory=list, max_length=4)
+    repost_of: str | None = Field(default=None, max_length=40)
+
+
+class CommentCreateRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=1000)
 
 
 def request_data(request: BaseModel) -> dict:
@@ -112,6 +143,19 @@ def health():
     return {"status": "ok"}
 
 
+@app.post("/auth/signup", status_code=status.HTTP_201_CREATED, tags=["authentication"])
+def signup(request: UserCreateRequest):
+    """Public self-service registration. New accounts start with the 'User' role."""
+    if request.role != "User":
+        raise api_error(Exception("Self-service accounts are created with the standard User role."), status.HTTP_400_BAD_REQUEST)
+    try:
+        user = manager.create_user(**request_data(request))
+        manager.logger.log("USER_SIGNED_UP", user.user_id, f"role={user.role}")
+        return {"message": "Account created. You can sign in now.", "user": user.to_dict()}
+    except (UserManagementError, ValueError) as error:
+        raise api_error(error)
+
+
 @app.post("/setup/administrator", status_code=status.HTTP_201_CREATED, tags=["setup"])
 def initial_administrator(http_request: Request, request: UserCreateRequest):
     """One-time bootstrap. It is unavailable as soon as any account exists."""
@@ -133,14 +177,14 @@ def initial_administrator(http_request: Request, request: UserCreateRequest):
 def login(request: LoginRequest, http_request: Request, response: Response):
     client_ip = http_request.client.host if http_request.client else "unknown"
     if not login_limiter.allowed(client_ip):
-        manager.logger.log("LOGIN_RATE_LIMITED", request.user_id, f"ip={client_ip}")
+        manager.logger.log("LOGIN_RATE_LIMITED", request.email, f"ip={client_ip}")
         raise api_error(Exception("Too many login attempts. Try again later."), status.HTTP_429_TOO_MANY_REQUESTS)
     try:
-        user = manager.authenticate(**request_data(request))
+        user = manager.authenticate_by_email(request.email, request.password, request.totp_code)
         token, expires = sessions.issue(user.user_id)
         response.set_cookie("sums_session", token, max_age=settings.session_minutes * 60, httponly=True,
-                            secure=settings.cookie_secure, samesite="strict", path="/")
-        return {"expires_at": expires.isoformat(), "user": user.to_dict()}
+                            secure=settings.cookie_secure, samesite="lax", path="/")
+        return {"expires_at": expires.isoformat(), "token": token, "user": user.to_dict()}
     except TwoFactorRequiredError:
         # Password accepted — the client must resubmit with a TOTP code.
         raise api_error(Exception("Two-factor authentication code required."), status.HTTP_401_UNAUTHORIZED)
@@ -154,7 +198,7 @@ def logout(response: Response, request: Request, _: object = Depends(current_use
     token = request.cookies.get("sums_session")
     if token:
         sessions.revoke(token)
-    response.delete_cookie("sums_session", httponly=True, secure=settings.cookie_secure, samesite="strict", path="/")
+    response.delete_cookie("sums_session", httponly=True, secure=settings.cookie_secure, samesite="lax", path="/")
 
 
 @app.get("/users", tags=["users"])
@@ -240,3 +284,106 @@ def identify_user(user_id: str, _: object = Depends(require_roles("Administrator
         return manager.identify_user(user_id)
     except UserNotFoundError as error:
         raise api_error(error, status.HTTP_404_NOT_FOUND)
+
+
+# ---------------------------------------------------------------------------
+# Posts, comments, likes, and media uploads — proxied to the storage server
+# ---------------------------------------------------------------------------
+
+@app.post("/media/upload", tags=["posts"])
+async def upload_media(file: UploadFile = File(...), user=Depends(current_user)):
+    """Forward the uploaded file to the dedicated storage server."""
+    content = await file.read()
+    files = {"file": (file.filename or "upload", content, file.content_type or "application/octet-stream")}
+    response = _storage_request("POST", "/media/upload", files=files)
+    if response.status_code >= 400:
+        raise api_error(Exception(response.json().get("detail", "Upload failed.")), response.status_code)
+    manager.logger.log("MEDIA_UPLOADED", user.user_id, f"mime={file.content_type} bytes={len(content)}")
+    return response.json()
+
+
+@app.get("/posts", tags=["posts"])
+def list_posts(_: object = Depends(current_user)):
+    """Return the global feed from the storage server."""
+    response = _storage_request("GET", "/posts")
+    if response.status_code >= 400:
+        raise api_error(Exception(response.json().get("detail", "Storage error.")), response.status_code)
+    return response.json()
+
+
+@app.get("/posts/user/{author_id}", tags=["posts"])
+def list_user_posts(author_id: str, _: object = Depends(current_user)):
+    response = _storage_request("GET", f"/posts/user/{author_id}")
+    if response.status_code >= 400:
+        raise api_error(Exception(response.json().get("detail", "Storage error.")), response.status_code)
+    return response.json()
+
+
+@app.get("/posts/{post_id}", tags=["posts"])
+def get_post(post_id: str, _: object = Depends(current_user)):
+    response = _storage_request("GET", f"/posts/{post_id}")
+    if response.status_code >= 400:
+        raise api_error(Exception(response.json().get("detail", "Post not found.")), response.status_code)
+    return response.json()
+
+
+@app.post("/posts", status_code=status.HTTP_201_CREATED, tags=["posts"])
+def create_post(request: PostCreateRequest, user=Depends(current_user)):
+    payload = {
+        "author_id": user.user_id,
+        "author_name": user.name,
+        "author_role": user.role,
+        "body": request.body,
+        "media": [item.model_dump() for item in request.media],
+        "repost_of": request.repost_of,
+    }
+    response = _storage_request("POST", "/posts", json=payload)
+    if response.status_code >= 400:
+        raise api_error(Exception(response.json().get("detail", "Could not create post.")), response.status_code)
+    return response.json()
+
+
+@app.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["posts"])
+def delete_post(post_id: str, user=Depends(current_user)):
+    response = _storage_request("DELETE", f"/posts/{post_id}", params={"actor_id": user.user_id, "actor_role": user.role})
+    if response.status_code == 404:
+        raise api_error(Exception("Post not found."), status.HTTP_404_NOT_FOUND)
+    if response.status_code == 403:
+        raise api_error(Exception("You can only delete your own posts."), status.HTTP_403_FORBIDDEN)
+    if response.status_code >= 400:
+        raise api_error(Exception(response.json().get("detail", "Storage error.")), response.status_code)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.post("/posts/{post_id}/like", tags=["posts"])
+def toggle_like(post_id: str, user=Depends(current_user)):
+    response = _storage_request("POST", f"/posts/{post_id}/like", json={"user_id": user.user_id})
+    if response.status_code >= 400:
+        raise api_error(Exception(response.json().get("detail", "Storage error.")), response.status_code)
+    return response.json()
+
+
+@app.post("/posts/{post_id}/comments", status_code=status.HTTP_201_CREATED, tags=["posts"])
+def add_comment(post_id: str, request: CommentCreateRequest, user=Depends(current_user)):
+    payload = {
+        "author_id": user.user_id,
+        "author_name": user.name,
+        "author_role": user.role,
+        "body": request.body,
+    }
+    response = _storage_request("POST", f"/posts/{post_id}/comments", json=payload)
+    if response.status_code >= 400:
+        raise api_error(Exception(response.json().get("detail", "Could not add comment.")), response.status_code)
+    return response.json()
+
+
+@app.delete("/posts/{post_id}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["posts"])
+def delete_comment(post_id: str, comment_id: str, user=Depends(current_user)):
+    response = _storage_request("DELETE", f"/posts/{post_id}/comments/{comment_id}", params={"actor_id": user.user_id, "actor_role": user.role})
+    if response.status_code == 404:
+        raise api_error(Exception("Comment not found."), status.HTTP_404_NOT_FOUND)
+    if response.status_code == 403:
+        raise api_error(Exception("You can only delete your own comments."), status.HTTP_403_FORBIDDEN)
+    if response.status_code >= 400:
+        raise api_error(Exception(response.json().get("detail", "Storage error.")), response.status_code)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

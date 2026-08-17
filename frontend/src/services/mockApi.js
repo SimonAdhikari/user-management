@@ -9,6 +9,9 @@ const initialUsers = [
     password: 'DemoPass1!',
     role: 'Administrator',
     is_locked: false,
+    kyc_status: 'unverified',
+    kyc_document_type: null,
+    totp_enabled: false,
   },
 ]
 
@@ -40,7 +43,7 @@ function createUser(data) {
   if (!data.name?.trim() || !data.password || !data.role) return fail('Name, password, and role are required.')
   const userId = data.user_id?.trim() || `USR_${crypto.randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`
   if (records.some((user) => user.user_id === userId)) return fail('A user with this ID already exists.', 409)
-  const user = { user_id: userId, name: data.name.trim(), email, password: data.password, role: data.role, is_locked: false }
+  const user = { user_id: userId, name: data.name.trim(), email, password: data.password, role: data.role, is_locked: false, kyc_status: 'unverified', kyc_document_type: null, totp_enabled: false }
   saveUsers([...records, user])
   addEvent('USER_CREATED', userId, `role=${user.role}`)
   return response({ message: 'User created.', user: publicUser(user) }, 201)
@@ -61,6 +64,10 @@ export const mockApi = {
         recent_events: events().slice(-10),
       })
     }
+    if (url === '/kyc/status') {
+      const user = users()[0]
+      return response({ kyc_status: user.kyc_status || 'unverified', document_type: user.kyc_document_type || null })
+    }
     return fail(`Offline endpoint not implemented: GET ${url}`, 404)
   },
 
@@ -76,6 +83,24 @@ export const mockApi = {
       return fail('Offline mode already includes a demo administrator account.', 409)
     }
     if (url === '/users') return createUser(data)
+    if (url === '/2fa/setup') return response({ secret: 'OFFLINE-DEMO-SECRET', provisioning_uri: 'otpauth://totp/SUMS:offline' })
+    if (url === '/2fa/confirm') {
+      if (data.code !== '123456') return fail('For offline mode, use verification code 123456.')
+      const records = users(); records[0] = { ...records[0], totp_enabled: true }; saveUsers(records)
+      addEvent('TWO_FACTOR_ENABLED', records[0].user_id)
+      return response({ message: 'Two-factor authentication enabled.', totp_enabled: true })
+    }
+    if (url === '/2fa/disable') {
+      if (data.code !== '123456') return fail('For offline mode, use verification code 123456.')
+      const records = users(); records[0] = { ...records[0], totp_enabled: false }; saveUsers(records)
+      addEvent('TWO_FACTOR_DISABLED', records[0].user_id)
+      return response({ message: 'Two-factor authentication disabled.', totp_enabled: false })
+    }
+    if (url === '/kyc/submit') {
+      const records = users(); records[0] = { ...records[0], kyc_status: 'verified', kyc_document_type: data.document_type }; saveUsers(records)
+      addEvent('KYC_VERIFIED', records[0].user_id, `document_type=${data.document_type}`)
+      return response({ message: 'KYC verification completed.', kyc_status: 'verified' })
+    }
     const unlock = url.match(/^\/users\/([^/]+)\/unlock$/)
     if (unlock) {
       const records = users()

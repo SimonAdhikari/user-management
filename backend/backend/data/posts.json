@@ -1,0 +1,47 @@
+[
+  {
+    "id": "POST_8BA519705F18",
+    "author_id": "USR_04C74386FE",
+    "author_name": "\u0930\u093e\u092e \u092c\u0939\u093e\u0926\u0941\u0930",
+    "author_role": "User",
+    "body": "\u092f\u094b \u0930\u093e\u092e\u094d\u0930\u094b \u092a\u094b\u0938\u094d\u091f \u0939\u094b! \u092e\u0932\u093e\u0908 \u092e\u0928 \u092a\u00a5\u092f\u094b\u0964",
+    "media": [],
+    "created_at": "2026-08-16T16:15:20.061312+00:00",
+    "likes": [],
+    "comments": [],
+    "repost_of": {
+      "id": "POST_0F9263E5CA01",
+      "author_id": "USR_D2A422779F",
+      "author_name": "System Administrator",
+      "author_role": "Administrator",
+      "body": "Hello workspace! This is my first post on the new social feed. Excited to share updates here.",
+      "media": [],
+      "created_at": "2026-08-16T15:38:12.666220+00:00",
+      "like_count": 2,
+      "comment_count": 1
+    }
+  },
+  {
+    "id": "POST_0F9263E5CA01",
+    "author_id": "USR_D2A422779F",
+    "author_name": "System Administrator",
+    "author_role": "Administrator",
+    "body": "Hello workspace! This is my first post on the new social feed. Excited to share updates here.",
+    "media": [],
+    "created_at": "2026-08-16T15:38:12.666220+00:00",
+    "likes": [
+      "USR_D2A422779F",
+      "USR_4976205DB2"
+    ],
+    "comments": [
+      {
+        "id": "CMT_C8974ADA7E",
+        "author_id": "USR_D2A422779F",
+        "author_name": "System Administrator",
+        "author_role": "Administrator",
+        "body": "Great first post! Welcome to the feed.",
+        "created_at": "2026-08-16T15:41:10.186997+00:00"
+      }
+    ]
+  }
+]

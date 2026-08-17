@@ -35,3 +35,7 @@ class TwoFactorRequiredError(AuthenticationError):
 
 class UserNotFoundError(UserManagementError):
     """Raised when no record matches a requested user ID."""
+
+
+class PostNotFoundError(UserManagementError):
+    """Raised when no post matches a requested post ID."""
