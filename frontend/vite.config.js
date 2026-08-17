@@ -63,6 +63,12 @@ export default defineConfig({
     },
   },
   preview: {
+    allowedHosts: [
+      '127.0.0.1',
+      'localhost',
+      '192.168.1.80',
+      '.trycloudflare.com',  // Allow all Cloudflare tunnel domains
+    ],
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
