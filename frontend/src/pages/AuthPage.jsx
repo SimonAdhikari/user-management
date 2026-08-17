@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ArrowRight, KeyRound, LockKeyhole, ShieldCheck, Sparkles, UserPlus } from 'lucide-react'
 import { api, errorMessage } from '../services/api'
 import { useAuth } from '../context/AuthContext'
-import AnimatedLogo from '../components/AnimatedLogo'
+import BrandLogo from '../components/BrandLogo'
 
 const emptySetup = { user_id: '', name: '', email: '', password: '', setup_key: '', role: 'Administrator' }
 const emptySignup = { name: '', email: '', password: '' }
@@ -56,7 +56,7 @@ export default function AuthPage() {
 
   return <main className="auth-shell">
     <section className="auth-brand">
-      <AnimatedLogo size={52} iconSize={30} className="brand-mark" />
+      <BrandLogo size={64} className="brand-mark" />
       <span className="eyebrow"><Sparkles size={14} /> SOCIAL MEDIA PLATFORM</span>
       <h1>Connect, share, and engage.</h1>
       <p>A secure social platform for posting updates, photos, videos, and connecting with your community.</p>
@@ -69,7 +69,7 @@ export default function AuthPage() {
     <section className="auth-card-wrap">
       <div className="auth-card">
         <div className="auth-card-heading">
-          <AnimatedLogo size={38} iconSize={19} className="mini-logo" />
+          <BrandLogo size={44} className="mini-logo" />
           <h2>{isLogin ? 'Welcome back' : isSignup ? 'Create your account' : 'First-time setup'}</h2>
           <p>{isLogin ? 'Sign in to continue to your feed.' : isSignup ? 'Join the platform — create a free account.' : 'Create the first administrator account.'}</p>
         </div>

@@ -1,30 +1,44 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="48" height="46" fill="none" viewBox="0 0 48 46">
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="none" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="goldBolt" x1="0" y1="0" x2="48" y2="46" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ffe08a"/>
-      <stop offset="0.5" stop-color="#f0b429"/>
-      <stop offset="1" stop-color="#c98a0a"/>
+    <linearGradient id="ringGrad" x1="12" y1="12" x2="52" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#67e8f9"/>
+      <stop offset="0.5" stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#c084fc"/>
     </linearGradient>
-    <linearGradient id="goldShine" x1="10" y1="0" x2="38" y2="46" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#fff6d8" stop-opacity="0.9"/>
-      <stop offset="0.45" stop-color="#ffe08a" stop-opacity="0.25"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    <radialGradient id="coreGrad" cx="0.35" cy="0.3" r="0.9">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.45" stop-color="#c7d2fe"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </radialGradient>
+    <linearGradient id="nodeGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a5f3fc"/>
+      <stop offset="1" stop-color="#818cf8"/>
     </linearGradient>
-    <filter id="outerGlow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="2.6" result="blur"/>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0b1230"/>
+      <stop offset="0.55" stop-color="#141a45"/>
+      <stop offset="1" stop-color="#232a6e"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
       <feMerge>
         <feMergeNode in="blur"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
   </defs>
-  <!-- Shiny outer glow -->
-  <path filter="url(#outerGlow)" fill="#ffd75e" fill-opacity="0.55" d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z"/>
-  <!-- Golden bolt -->
-  <path fill="url(#goldBolt)" d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z"/>
-  <!-- Glossy shine overlay -->
-  <path fill="url(#goldShine)" d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z"/>
-  <!-- Bright specular streaks -->
-  <ellipse cx="14" cy="10" rx="10" ry="4" fill="#fffbe8" fill-opacity="0.65" transform="rotate(-24 14 10)"/>
-  <ellipse cx="34" cy="30" rx="6" ry="2.2" fill="#fff3c4" fill-opacity="0.4" transform="rotate(-24 34 30)"/>
+  <rect width="64" height="64" rx="19" fill="url(#bgGrad)"/>
+  <rect width="64" height="64" rx="19" stroke="rgba(129,140,248,0.4)" stroke-width="1.5" fill="none"/>
+  <circle cx="32" cy="32" r="17.5" stroke="url(#ringGrad)" stroke-width="2" stroke-linecap="round" stroke-dasharray="6 7" opacity="0.85"/>
+  <g stroke="url(#ringGrad)" stroke-width="2.2" stroke-linecap="round" opacity="0.55">
+    <line x1="32" y1="32" x2="32" y2="14.5"/>
+    <line x1="32" y1="32" x2="47.2" y2="40.8"/>
+    <line x1="32" y1="32" x2="16.8" y2="40.8"/>
+  </g>
+  <circle cx="32" cy="14.5" r="4.6" fill="url(#nodeGrad)" stroke="#0b1230" stroke-width="1.6"/>
+  <circle cx="47.2" cy="40.8" r="4.6" fill="url(#nodeGrad)" stroke="#0b1230" stroke-width="1.6"/>
+  <circle cx="16.8" cy="40.8" r="4.6" fill="url(#nodeGrad)" stroke="#0b1230" stroke-width="1.6"/>
+  <circle cx="32" cy="32" r="11.5" fill="url(#coreGrad)" opacity="0.28"/>
+  <circle filter="url(#glow)" cx="32" cy="32" r="8.4" fill="url(#coreGrad)" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/>
+  <circle cx="29.4" cy="29.2" r="2.6" fill="rgba(255,255,255,0.85)"/>
 </svg>

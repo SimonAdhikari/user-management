@@ -3,8 +3,6 @@ import { Trash2, X, Send, Heart, MessageCircle, User as UserIcon } from 'lucide-
 import { api, errorMessage } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api'
-
 const formatTime = (value) => {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
@@ -13,7 +11,8 @@ const formatTime = (value) => {
 const mediaUrl = (path) => {
   if (!path) return ''
   if (path.startsWith('http')) return path
-  if (path.startsWith('/media/')) return `${API_BASE.replace(/\/api$/, '')}${path}`
+  // Keep /media/... relative so it flows through the dev/reverse proxy to the
+  // storage server (port 8001). Prefixing the API origin would 404/ORB.
   return path
 }
 

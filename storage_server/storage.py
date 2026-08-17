@@ -17,6 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from crypto import DataCipher
+
 DATA_DIR = Path(__file__).resolve().parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOADS_DIR = DATA_DIR / "uploads"
@@ -39,12 +41,18 @@ def _new_id(prefix: str) -> str:
 
 
 class _Store:
-    """Thread-safe in-memory store backed by a JSON file."""
+    """Thread-safe in-memory store backed by an AES-256-GCM encrypted JSON file.
+
+    The file on disk is wrapped with authenticated encryption, so stealing
+    posts.json reveals nothing without the bootstrap key. Legacy plaintext
+    files load transparently and are re-encrypted on the next save.
+    """
 
     def __init__(self, file_path: Path) -> None:
         self.file_path = file_path
         self._posts: list[dict] = []
         self._lock = RLock()
+        self._cipher = DataCipher("storage-server-posts")
         self._load()
 
     def _load(self) -> None:
@@ -52,15 +60,18 @@ class _Store:
             import json
             content = self.file_path.read_text(encoding="utf-8").strip()
             if content:
-                self._posts = json.loads(content)
+                payload = json.loads(content)
+                # decrypt_json passes legacy plaintext lists through unchanged.
+                self._posts = self._cipher.decrypt_json(payload)
 
     def _save(self) -> None:
         import json
         import os
         from tempfile import NamedTemporaryFile
+        payload = self._cipher.encrypt_json(self._posts)
         with NamedTemporaryFile("w", encoding="utf-8", dir=self.file_path.parent,
                                 delete=False, prefix=".posts-", suffix=".tmp") as file:
-            json.dump(self._posts, file, indent=2)
+            json.dump(payload, file, indent=2)
             temp_name = file.name
         os.replace(temp_name, self.file_path)
 
@@ -111,6 +122,10 @@ def _public_view(post: dict) -> dict:
         "media": list(post.get("media", [])),
         "created_at": post["created_at"],
         "like_count": len(post.get("likes", [])),
+        "likes": list(post.get("likes", [])),
+        "reactions": _reaction_summary(post.get("reactions", [])),
+        "my_reaction": None,
+        "share_count": post.get("shares", 0),
         "comment_count": len(post.get("comments", [])),
         "repost_of": post.get("repost_of"),
         "comments": [
@@ -121,6 +136,10 @@ def _public_view(post: dict) -> dict:
                 "author_role": c["author_role"],
                 "body": c["body"],
                 "created_at": c["created_at"],
+                "parent_id": c.get("parent_id"),
+                "likes": list(c.get("likes", [])),
+                "like_count": len(c.get("likes", [])),
+                "edited": c.get("edited", False),
             }
             for c in post.get("comments", [])
         ],
@@ -148,15 +167,38 @@ class CommentCreateRequest(BaseModel):
     author_name: str = Field(min_length=1, max_length=80)
     author_role: str = Field(min_length=1, max_length=40)
     body: str = Field(min_length=1, max_length=1000)
+    parent_id: str | None = Field(default=None, max_length=40)
+
+
+class CommentEditRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=1000)
 
 
 class LikeRequest(BaseModel):
     user_id: str = Field(min_length=1, max_length=40)
 
 
+class ReactRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=40)
+    reaction: str = Field(min_length=1, max_length=20)
+
+
+ALLOWED_REACTIONS = {"like", "love", "haha", "wow", "sad", "angry"}
+
+
+def _reaction_summary(reactions: list[dict]) -> dict:
+    summary = {kind: 0 for kind in ALLOWED_REACTIONS}
+    for item in reactions:
+        if item.get("type") in summary:
+            summary[item["type"]] += 1
+    return summary
+
+
 app = FastAPI(title="Post Storage Server", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "DELETE"], allow_headers=["*"])
-app.mount("/media", StaticFiles(directory=str(UPLOADS_DIR)), name="media")
+# NOTE: the /media static mount is registered at the very bottom of this module.
+# If it were mounted here (before the routes), it would intercept POST /media/upload
+# and StaticFiles would reject it with 405 Method Not Allowed.
 
 
 @app.get("/health")
@@ -218,6 +260,8 @@ def create_post(request: PostCreateRequest):
             "media": cleaned_media,
             "created_at": _now(),
             "likes": [],
+            "reactions": [],
+            "shares": 0,
             "comments": [],
             "repost_of": repost_ref,
         }
@@ -255,12 +299,53 @@ def toggle_like(post_id: str, request: LikeRequest):
     raise HTTPException(status_code=404, detail="Post not found.")
 
 
+@app.post("/posts/{post_id}/react")
+def react_to_post(post_id: str, request: ReactRequest):
+    """Set, change, or clear (same reaction again) a Facebook-style reaction."""
+    if request.reaction not in ALLOWED_REACTIONS:
+        raise HTTPException(status_code=400, detail="Unknown reaction type.")
+    with store._lock:
+        for post in store._posts:
+            if post["id"] == post_id:
+                reactions = post.setdefault("reactions", [])
+                existing = next((r for r in reactions if r["user_id"] == request.user_id), None)
+                if existing and existing["type"] == request.reaction:
+                    reactions.remove(existing)
+                    my_reaction = None
+                elif existing:
+                    existing["type"] = request.reaction
+                    my_reaction = request.reaction
+                else:
+                    reactions.append({"user_id": request.user_id, "type": request.reaction})
+                    my_reaction = request.reaction
+                store._save()
+                return {"my_reaction": my_reaction, "reactions": _reaction_summary(reactions),
+                        "like_count": len(post.get("likes", [])) + len(reactions)}
+    raise HTTPException(status_code=404, detail="Post not found.")
+
+
+@app.post("/posts/{post_id}/share")
+def share_post(post_id: str, request: LikeRequest):
+    """Increment the share counter (Facebook-style share)."""
+    with store._lock:
+        for post in store._posts:
+            if post["id"] == post_id:
+                post["shares"] = post.get("shares", 0) + 1
+                store._save()
+                return {"share_count": post["shares"]}
+    raise HTTPException(status_code=404, detail="Post not found.")
+
+
 @app.post("/posts/{post_id}/comments", status_code=status.HTTP_201_CREATED)
 def add_comment(post_id: str, request: CommentCreateRequest):
     cleaned = _validate_body(request.body)
     with store._lock:
         for post in store._posts:
             if post["id"] == post_id:
+                if request.parent_id:
+                    parent = next((c for c in post.get("comments", []) if c["id"] == request.parent_id), None)
+                    if parent is None:
+                        raise HTTPException(status_code=404, detail="Parent comment not found.")
                 comment = {
                     "id": _new_id("CMT"),
                     "author_id": request.author_id,
@@ -268,10 +353,51 @@ def add_comment(post_id: str, request: CommentCreateRequest):
                     "author_role": request.author_role,
                     "body": cleaned,
                     "created_at": _now(),
+                    "parent_id": request.parent_id,
+                    "likes": [],
+                    "edited": False,
                 }
                 post["comments"].append(comment)
                 store._save()
                 return {"message": "Comment added.", "comment": comment}
+    raise HTTPException(status_code=404, detail="Post not found.")
+
+
+@app.post("/posts/{post_id}/comments/{comment_id}/like")
+def toggle_comment_like(post_id: str, comment_id: str, request: LikeRequest):
+    with store._lock:
+        for post in store._posts:
+            if post["id"] == post_id:
+                for comment in post.get("comments", []):
+                    if comment["id"] == comment_id:
+                        likes = comment.setdefault("likes", [])
+                        if request.user_id in likes:
+                            likes.remove(request.user_id)
+                            liked = False
+                        else:
+                            likes.append(request.user_id)
+                            liked = True
+                        store._save()
+                        return {"liked": liked, "like_count": len(likes)}
+                raise HTTPException(status_code=404, detail="Comment not found.")
+    raise HTTPException(status_code=404, detail="Post not found.")
+
+
+@app.put("/posts/{post_id}/comments/{comment_id}")
+def edit_comment(post_id: str, comment_id: str, request: CommentEditRequest, actor_id: str, actor_role: str):
+    cleaned = _validate_body(request.body)
+    with store._lock:
+        for post in store._posts:
+            if post["id"] == post_id:
+                for comment in post.get("comments", []):
+                    if comment["id"] == comment_id:
+                        if comment["author_id"] != actor_id and actor_role != "Administrator":
+                            raise HTTPException(status_code=403, detail="You can only edit your own comments.")
+                        comment["body"] = cleaned
+                        comment["edited"] = True
+                        store._save()
+                        return {"message": "Comment updated.", "comment": comment}
+                raise HTTPException(status_code=404, detail="Comment not found.")
     raise HTTPException(status_code=404, detail="Post not found.")
 
 
@@ -320,3 +446,9 @@ async def upload_media(file: UploadFile = File(...)):
         "filename": file.filename or stored_name,
         "size_bytes": total,
     }
+
+
+# Static file serving MUST be registered last: Starlette matches routes in
+# registration order, and a mount would otherwise shadow the API routes above
+# (e.g. POST /media/upload would hit StaticFiles and return 405).
+app.mount("/media", StaticFiles(directory=str(UPLOADS_DIR)), name="media")

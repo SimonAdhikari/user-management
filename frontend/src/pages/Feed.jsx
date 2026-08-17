@@ -1,9 +1,19 @@
-import { useEffect, useState } from 'react'
-import { ImagePlus, MessageCircle, Send, Trash2, X, Heart, Repeat2, User as UserIcon } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ImagePlus, MessageCircle, Trash2, X, Heart, Repeat2, Share2, User as UserIcon } from 'lucide-react'
 import { api, errorMessage } from '../services/api'
 import { useAuth } from '../context/AuthContext'
+import CommentSection from '../components/CommentSection'
+import ShareModal from '../components/ShareModal'
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api'
+// Facebook-style reaction palette
+export const REACTIONS = [
+  { type: 'like', emoji: '👍', label: 'Like' },
+  { type: 'love', emoji: '❤️', label: 'Love' },
+  { type: 'haha', emoji: '😂', label: 'Haha' },
+  { type: 'wow', emoji: '😮', label: 'Wow' },
+  { type: 'sad', emoji: '😢', label: 'Sad' },
+  { type: 'angry', emoji: '😠', label: 'Angry' },
+]
 
 const formatTime = (value) => {
   const date = new Date(value)
@@ -13,7 +23,8 @@ const formatTime = (value) => {
 const mediaUrl = (path) => {
   if (!path) return ''
   if (path.startsWith('http')) return path
-  if (path.startsWith('/media/')) return `${API_BASE.replace(/\/api$/, '')}${path}`
+  // Keep /media/... relative so it flows through the dev/reverse proxy to the
+  // storage server (port 8001). Prefixing the API origin would 404/ORB.
   return path
 }
 
@@ -48,14 +59,38 @@ function RepostCard({ repost }) {
 
 function PostCard({ post, currentUser, onChange, onDelete }) {
   const [showComments, setShowComments] = useState(false)
-  const [commentText, setCommentText] = useState('')
-  const [showRepost, setShowRepost] = useState(false)
-  const [repostText, setRepostText] = useState('')
+  const [showShare, setShowShare] = useState(false)
   const [busy, setBusy] = useState(false)
   const [liked, setLiked] = useState(post.like_count > 0 && post.likes?.includes?.(currentUser?.user_id))
   const [likeCount, setLikeCount] = useState(post.like_count)
+  const [reactions, setReactions] = useState(post.reactions || {})
+  const [myReaction, setMyReaction] = useState(post.my_reaction || null)
+  const [showReactionPicker, setShowReactionPicker] = useState(false)
+  const [shareCount, setShareCount] = useState(post.share_count || 0)
+  const longPressTimer = useRef(null)
+  const longPressFired = useRef(false)
+
+  const totalReactions = REACTIONS.reduce((sum, r) => sum + (reactions[r.type] || 0), 0)
+
+  // Touch support: a long press (450ms) on the like button opens the reaction
+  // picker, since hover doesn't exist on mobile. A quick tap still toggles like.
+  const startLongPress = () => {
+    longPressFired.current = false
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true
+      setShowReactionPicker(true)
+    }, 450)
+  }
+  const cancelLongPress = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+    longPressTimer.current = null
+  }
+  useEffect(() => cancelLongPress, [])
 
   const handleLike = async () => {
+    if (longPressFired.current) { longPressFired.current = false; return }
+    // On touch, a tap while the picker is open dismisses it instead of liking.
+    if (showReactionPicker) { setShowReactionPicker(false); return }
     setBusy(true)
     try {
       const { data } = await api.post(`/posts/${post.id}/like`)
@@ -68,45 +103,20 @@ function PostCard({ post, currentUser, onChange, onDelete }) {
     }
   }
 
-  const handleComment = async (event) => {
-    event.preventDefault()
-    if (!commentText.trim()) return
-    setBusy(true)
+  const handleReact = async (type) => {
+    setShowReactionPicker(false)
     try {
-      await api.post(`/posts/${post.id}/comments`, { body: commentText.trim() })
-      setCommentText('')
-      await onChange()
-      setShowComments(true)
+      const { data } = await api.post(`/posts/${post.id}/react`, { reaction: type })
+      setMyReaction(data.my_reaction)
+      setReactions(data.reactions)
     } catch (err) {
       alert(errorMessage(err))
-    } finally {
-      setBusy(false)
     }
   }
 
-  const handleRepost = async (event) => {
-    event.preventDefault()
-    setBusy(true)
-    try {
-      await api.post('/posts', { body: repostText.trim() || 'Repost', repost_of: post.id })
-      setShowRepost(false)
-      setRepostText('')
-      await onChange()
-    } catch (err) {
-      alert(errorMessage(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const handleDeleteComment = async (commentId) => {
-    if (!confirm('Delete this comment?')) return
-    try {
-      await api.delete(`/posts/${post.id}/comments/${commentId}`)
-      await onChange()
-    } catch (err) {
-      alert(errorMessage(err))
-    }
+  const handleShared = async () => {
+    setShareCount((count) => count + 1)
+    await onChange()
   }
 
   const canDelete = currentUser?.user_id === post.author_id || currentUser?.role === 'Administrator'
@@ -136,49 +146,36 @@ function PostCard({ post, currentUser, onChange, onDelete }) {
     )}
     {post.repost_of && <RepostCard repost={post.repost_of} />}
     <footer className="post-actions">
-      <button className={`post-action ${liked ? 'liked' : ''}`} onClick={handleLike} disabled={busy}>
-        <Heart size={18} fill={liked ? 'currentColor' : 'none'} /> {likeCount}
-      </button>
+      <div className="reaction-wrap">
+        <button className={`post-action ${liked || myReaction ? 'liked' : ''}`} onClick={handleLike} disabled={busy}
+          onMouseEnter={() => setShowReactionPicker(true)} onMouseLeave={() => setTimeout(() => setShowReactionPicker(false), 350)}
+          onTouchStart={startLongPress} onTouchEnd={cancelLongPress} onTouchMove={cancelLongPress} onContextMenu={(e) => e.preventDefault()}>
+          <Heart size={18} fill={liked || myReaction ? 'currentColor' : 'none'} /> {likeCount + totalReactions}
+        </button>
+        {showReactionPicker && (
+          <div className="reaction-picker" onMouseEnter={() => setShowReactionPicker(true)} onMouseLeave={() => setShowReactionPicker(false)}>
+            {REACTIONS.map(r => (
+              <button key={r.type} type="button" title={r.label}
+                className={`reaction-option ${myReaction === r.type ? 'active' : ''}`}
+                onClick={() => handleReact(r.type)}>
+                <span>{r.emoji}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <button className="post-action" onClick={() => setShowComments(!showComments)}>
         <MessageCircle size={18} /> {post.comment_count}
       </button>
-      <button className="post-action" onClick={() => setShowRepost(!showRepost)}>
+      <button className="post-action" onClick={() => setShowShare(true)}>
         <Repeat2 size={18} /> Repost
       </button>
+      <button className="post-action" onClick={() => setShowShare(true)}>
+        <Share2 size={18} /> {shareCount > 0 ? shareCount : 'Share'}
+      </button>
     </footer>
-    {showRepost && (
-      <form onSubmit={handleRepost} className="repost-form">
-        <textarea value={repostText} onChange={e => setRepostText(e.target.value)} placeholder="Say something about this post (optional)…" rows={2} maxLength={2000} />
-        <div className="repost-form-actions">
-          <button type="button" className="btn btn-secondary btn-compact" onClick={() => setShowRepost(false)}>Cancel</button>
-          <button type="submit" className="btn btn-compact" disabled={busy}>{busy ? 'Reposting…' : 'Repost'}</button>
-        </div>
-      </form>
-    )}
-    {showComments && (
-      <div className="post-comments">
-        {post.comments?.length > 0 ? post.comments.map(comment => (
-          <div key={comment.id} className="comment">
-            <div className="comment-avatar">{comment.author_name?.slice(0, 1).toUpperCase()}</div>
-            <div className="comment-body">
-              <div className="comment-meta">
-                <strong>{comment.author_name}</strong>
-                <span className={`role-pill role-${(comment.author_role || 'user').toLowerCase().replace(/\s+/g, '-')}`}>{comment.author_role}</span>
-                <time>{formatTime(comment.created_at)}</time>
-              </div>
-              <p>{comment.body}</p>
-            </div>
-            {(currentUser?.user_id === comment.author_id || currentUser?.role === 'Administrator') && (
-              <button className="icon-button" onClick={() => handleDeleteComment(comment.id)} title="Delete comment" aria-label="Delete comment"><X size={14} /></button>
-            )}
-          </div>
-        )) : <p className="muted">No comments yet. Be the first to reply.</p>}
-        <form onSubmit={handleComment} className="comment-form">
-          <input value={commentText} onChange={e => setCommentText(e.target.value)} placeholder="Write a comment…" maxLength={1000} />
-          <button type="submit" className="btn btn-compact" disabled={busy || !commentText.trim()}><Send size={14} /></button>
-        </form>
-      </div>
-    )}
+    {showComments && <CommentSection post={post} currentUser={currentUser} onChanged={onChange} />}
+    {showShare && <ShareModal post={post} currentUser={currentUser} onClose={() => setShowShare(false)} onShared={handleShared} />}
   </article>
 }
 

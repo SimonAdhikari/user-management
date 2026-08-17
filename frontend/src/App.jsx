@@ -1,9 +1,10 @@
-import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom'
+import { HashRouter, Routes, Route, useParams } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import AuthPage from './pages/AuthPage'
 import Layout from './Layout'
 import UserManagement from './pages/UserManagement'
 import Feed from './pages/Feed'
+import Clips from './pages/Clips'
 import Profile from './pages/Profile'
 import {
   Dashboard, ActivityLogs, MySecurity, Support
@@ -22,6 +23,7 @@ function ProtectedApp() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="feed" element={<Feed />} />
+          <Route path="clips" element={<Clips />} />
           <Route path="profile/:userId" element={<ProfileRoute />} />
           <Route path="users" element={<UserManagement />} />
           <Route path="logs" element={<ActivityLogs />} />
@@ -33,7 +35,9 @@ function ProtectedApp() {
 }
 
 function App() {
-  return <BrowserRouter><AuthProvider><ProtectedApp /></AuthProvider></BrowserRouter>
+  // HashRouter works everywhere — including when index.html is opened
+  // directly from the file system (file://) with no web server.
+  return <HashRouter><AuthProvider><ProtectedApp /></AuthProvider></HashRouter>
 }
 
 export default App

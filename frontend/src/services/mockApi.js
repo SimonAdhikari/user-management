@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'sums_offline_users'
 const EVENTS_KEY = 'sums_offline_events'
+const POSTS_KEY = 'sums_offline_posts'
 
 const initialUsers = [
   {
@@ -49,12 +50,112 @@ function createUser(data) {
   return response({ message: 'User created.', user: publicUser(user) }, 201)
 }
 
+// ---------------------------------------------------------------------------
+// Offline social store (posts, comments, reactions, share, repost)
+// Mirrors the storage-server shapes so the UI works identically offline.
+// ---------------------------------------------------------------------------
+const ALLOWED_REACTIONS = ['like', 'love', 'haha', 'wow', 'sad', 'angry']
+const nowIso = () => new Date().toISOString()
+const newId = (prefix) => `${prefix}_${crypto.randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`
+
+const posts = () => read(POSTS_KEY, [])
+const savePosts = (value) => localStorage.setItem(POSTS_KEY, JSON.stringify(value))
+
+const reactionSummary = (reactions) => ALLOWED_REACTIONS.reduce((acc, kind) => {
+  acc[kind] = reactions.filter((r) => r.type === kind).length
+  return acc
+}, {})
+
+const publicPost = (post) => ({
+  id: post.id,
+  author_id: post.author_id,
+  author_name: post.author_name,
+  author_role: post.author_role,
+  body: post.body,
+  media: post.media || [],
+  created_at: post.created_at,
+  like_count: (post.likes || []).length,
+  likes: post.likes || [],
+  reactions: reactionSummary(post.reactions || []),
+  my_reaction: null,
+  share_count: post.shares || 0,
+  comment_count: (post.comments || []).length,
+  repost_of: post.repost_of || null,
+  comments: (post.comments || []).map((c) => ({
+    id: c.id,
+    author_id: c.author_id,
+    author_name: c.author_name,
+    author_role: c.author_role,
+    body: c.body,
+    created_at: c.created_at,
+    parent_id: c.parent_id || null,
+    likes: c.likes || [],
+    like_count: (c.likes || []).length,
+    edited: c.edited || false,
+  })),
+})
+
+const findPost = (records, postId) => records.find((p) => p.id === postId)
+
+// Offline mode has no bearer-token session, so the signed-in user is read from
+// the same sessionStorage slot AuthContext writes on login.
+const currentOfflineUser = () => {
+  try { return JSON.parse(sessionStorage.getItem('sums_user') || 'null') } catch { return null }
+}
+
+function createOfflinePost(data, actor) {
+  const records = posts()
+  let repostRef = null
+  if (data.repost_of) {
+    const original = findPost(records, data.repost_of)
+    if (!original) return fail('Original post not found.', 404)
+    repostRef = {
+      id: original.id,
+      author_id: original.author_id,
+      author_name: original.author_name,
+      author_role: original.author_role,
+      body: original.body,
+      media: original.media || [],
+      created_at: original.created_at,
+      like_count: (original.likes || []).length,
+      comment_count: (original.comments || []).length,
+    }
+  }
+  const post = {
+    id: newId('POST'),
+    author_id: actor.user_id,
+    author_name: actor.name,
+    author_role: actor.role,
+    body: (data.body || '').trim(),
+    media: data.media || [],
+    created_at: nowIso(),
+    likes: [],
+    reactions: [],
+    shares: 0,
+    comments: [],
+    repost_of: repostRef,
+  }
+  if (!post.body) return fail('Post body is required.')
+  records.unshift(post)
+  savePosts(records)
+  addEvent('POST_CREATED', actor.user_id, post.id)
+  return response({ message: 'Post created.', post: publicPost(post) }, 201)
+}
+
 export const mockApi = {
   defaults: { headers: { common: {} } },
 
   get(url) {
     if (url === '/health') return response({ status: 'ok' })
     if (url === '/users') return response(users().map(publicUser))
+    if (url === '/posts') return response(posts().map(publicPost))
+    const userPosts = url.match(/^\/posts\/user\/([^/]+)$/)
+    if (userPosts) return response(posts().filter((p) => p.author_id === userPosts[1]).map(publicPost))
+    const singlePost = url.match(/^\/posts\/([^/]+)$/)
+    if (singlePost) {
+      const post = findPost(posts(), singlePost[1])
+      return post ? response(publicPost(post)) : fail('Post not found.', 404)
+    }
     if (url === '/reports/activity') {
       const records = users()
       return response({
@@ -74,8 +175,11 @@ export const mockApi = {
   post(url, data = {}) {
     if (url === '/auth/logout') return response(null, 204)
     if (url === '/auth/login') {
-      const user = users().find((item) => item.user_id === data.user_id && item.password === data.password)
-      if (!user || user.is_locked) return fail('Invalid user ID or password.', 401)
+      const identifier = (data.email || data.user_id || '').trim().toLowerCase()
+      const user = users().find((item) =>
+        (item.email && item.email.toLowerCase() === identifier) || item.user_id.toLowerCase() === identifier)
+      if (!user || user.password !== data.password) return fail('Invalid email or password.', 401)
+      if (user.is_locked) return fail('This account is locked. Contact an administrator.', 403)
       addEvent('LOGIN_SUCCESS', user.user_id)
       return response({ expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), user: publicUser(user) })
     }
@@ -111,6 +215,174 @@ export const mockApi = {
       addEvent('ACCOUNT_UNLOCKED', unlock[1])
       return response(publicUser(records[index]))
     }
+
+    // ---- Offline social endpoints ----
+    if (url === '/posts') {
+      const actor = currentOfflineUser()
+      if (!actor) return fail('Sign in to post.', 401)
+      return createOfflinePost(data, actor)
+    }
+    if (url === '/media/upload') {
+      // Offline: persist the file as a data URL so it renders without a server.
+      const file = data?.get?.('file')
+      if (!file) return fail('No file provided.', 400)
+      return new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve({
+          status: 201,
+          data: {
+            url: reader.result,
+            kind: file.type.startsWith('video') ? 'video' : 'image',
+            mime_type: file.type,
+            filename: file.name,
+          },
+        })
+        reader.readAsDataURL(file)
+      })
+    }
+    const like = url.match(/^\/posts\/([^/]+)\/like$/)
+    if (like) {
+      const actor = currentOfflineUser()
+      if (!actor) return fail('Sign in to like posts.', 401)
+      const records = posts()
+      const post = findPost(records, like[1])
+      if (!post) return fail('Post not found.', 404)
+      post.likes = post.likes || []
+      const idx = post.likes.indexOf(actor.user_id)
+      let liked
+      if (idx >= 0) { post.likes.splice(idx, 1); liked = false } else { post.likes.push(actor.user_id); liked = true }
+      savePosts(records)
+      return response({ liked, like_count: post.likes.length })
+    }
+    const react = url.match(/^\/posts\/([^/]+)\/react$/)
+    if (react) {
+      const actor = currentOfflineUser()
+      if (!actor) return fail('Sign in to react.', 401)
+      if (!ALLOWED_REACTIONS.includes(data.reaction)) return fail('Unknown reaction type.')
+      const records = posts()
+      const post = findPost(records, react[1])
+      if (!post) return fail('Post not found.', 404)
+      post.reactions = post.reactions || []
+      const existing = post.reactions.find((r) => r.user_id === actor.user_id)
+      let myReaction
+      if (existing && existing.type === data.reaction) {
+        post.reactions = post.reactions.filter((r) => r !== existing); myReaction = null
+      } else if (existing) {
+        existing.type = data.reaction; myReaction = data.reaction
+      } else {
+        post.reactions.push({ user_id: actor.user_id, type: data.reaction }); myReaction = data.reaction
+      }
+      savePosts(records)
+      return response({ my_reaction: myReaction, reactions: reactionSummary(post.reactions), like_count: (post.likes || []).length + post.reactions.length })
+    }
+    const share = url.match(/^\/posts\/([^/]+)\/share$/)
+    if (share) {
+      const records = posts()
+      const post = findPost(records, share[1])
+      if (!post) return fail('Post not found.', 404)
+      post.shares = (post.shares || 0) + 1
+      savePosts(records)
+      return response({ share_count: post.shares })
+    }
+    const addComment = url.match(/^\/posts\/([^/]+)\/comments$/)
+    if (addComment) {
+      const actor = currentOfflineUser()
+      if (!actor) return fail('Sign in to comment.', 401)
+      const body = (data.body || '').trim()
+      if (!body) return fail('Comment body is required.')
+      const records = posts()
+      const post = findPost(records, addComment[1])
+      if (!post) return fail('Post not found.', 404)
+      if (data.parent_id && !(post.comments || []).some((c) => c.id === data.parent_id)) {
+        return fail('Parent comment not found.', 404)
+      }
+      const comment = {
+        id: newId('CMT'),
+        author_id: actor.user_id,
+        author_name: actor.name,
+        author_role: actor.role,
+        body,
+        created_at: nowIso(),
+        parent_id: data.parent_id || null,
+        likes: [],
+        edited: false,
+      }
+      post.comments = post.comments || []
+      post.comments.push(comment)
+      savePosts(records)
+      return response({ message: 'Comment added.', comment }, 201)
+    }
+    const commentLike = url.match(/^\/posts\/([^/]+)\/comments\/([^/]+)\/like$/)
+    if (commentLike) {
+      const actor = currentOfflineUser()
+      if (!actor) return fail('Sign in to like comments.', 401)
+      const records = posts()
+      const post = findPost(records, commentLike[1])
+      if (!post) return fail('Post not found.', 404)
+      const comment = (post.comments || []).find((c) => c.id === commentLike[2])
+      if (!comment) return fail('Comment not found.', 404)
+      comment.likes = comment.likes || []
+      const idx = comment.likes.indexOf(actor.user_id)
+      let liked
+      if (idx >= 0) { comment.likes.splice(idx, 1); liked = false } else { comment.likes.push(actor.user_id); liked = true }
+      savePosts(records)
+      return response({ liked, like_count: comment.likes.length })
+    }
     return fail(`Offline endpoint not implemented: POST ${url}`, 404)
+  },
+
+  put(url, data = {}) {
+    const editComment = url.match(/^\/posts\/([^/]+)\/comments\/([^/]+)$/)
+    if (editComment) {
+      const actor = currentOfflineUser()
+      if (!actor) return fail('Sign in to edit comments.', 401)
+      const body = (data.body || '').trim()
+      if (!body) return fail('Comment body is required.')
+      const records = posts()
+      const post = findPost(records, editComment[1])
+      if (!post) return fail('Post not found.', 404)
+      const comment = (post.comments || []).find((c) => c.id === editComment[2])
+      if (!comment) return fail('Comment not found.', 404)
+      if (comment.author_id !== actor.user_id && actor.role !== 'Administrator') {
+        return fail('You can only edit your own comments.', 403)
+      }
+      comment.body = body
+      comment.edited = true
+      savePosts(records)
+      return response({ message: 'Comment updated.', comment })
+    }
+    return fail(`Offline endpoint not implemented: PUT ${url}`, 404)
+  },
+
+  delete(url) {
+    const actor = currentOfflineUser()
+    if (!actor) return fail('Sign in to delete.', 401)
+    const delComment = url.match(/^\/posts\/([^/]+)\/comments\/([^/]+)$/)
+    if (delComment) {
+      const records = posts()
+      const post = findPost(records, delComment[1])
+      if (!post) return fail('Post not found.', 404)
+      const comment = (post.comments || []).find((c) => c.id === delComment[2])
+      if (!comment) return fail('Comment not found.', 404)
+      if (comment.author_id !== actor.user_id && actor.role !== 'Administrator') {
+        return fail('You can only delete your own comments.', 403)
+      }
+      // Remove the comment and any replies nested under it.
+      post.comments = (post.comments || []).filter((c) => c.id !== delComment[2] && c.parent_id !== delComment[2])
+      savePosts(records)
+      return response(null, 204)
+    }
+    const delPost = url.match(/^\/posts\/([^/]+)$/)
+    if (delPost) {
+      const records = posts()
+      const post = findPost(records, delPost[1])
+      if (!post) return fail('Post not found.', 404)
+      if (post.author_id !== actor.user_id && actor.role !== 'Administrator') {
+        return fail('You can only delete your own posts.', 403)
+      }
+      savePosts(records.filter((p) => p.id !== delPost[1]))
+      return response(null, 204)
+    }
+    return fail(`Offline endpoint not implemented: DELETE ${url}`, 404)
   },
 }

@@ -27,7 +27,7 @@ app = FastAPI(title="Secure User Management API", version="1.0.0",
               docs_url="/docs" if settings.environment == "development" else None,
               redoc_url=None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True,
-                   allow_methods=["GET", "POST", "DELETE"], allow_headers=["Authorization", "Content-Type", "X-Setup-Key"])
+                   allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Authorization", "Content-Type", "X-Setup-Key"])
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
 if settings.environment == "production":
     app.add_middleware(HTTPSRedirectMiddleware)
@@ -82,6 +82,11 @@ class PostCreateRequest(BaseModel):
 
 class CommentCreateRequest(BaseModel):
     body: str = Field(min_length=1, max_length=1000)
+    parent_id: str | None = Field(default=None, max_length=40)
+
+
+class CommentEditRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=1000)
 
 
 def request_data(request: BaseModel) -> dict:
@@ -124,8 +129,11 @@ async def security_headers(request: Request, call_next):
         # Browser state-changing requests must originate from an explicitly trusted UI.
         if origin and origin not in settings.cors_origins:
             return Response(status_code=status.HTTP_403_FORBIDDEN, content="Blocked origin")
+    # Media uploads are validated for size on the storage server (25 MB limit),
+    # so they are exempt from the small JSON-body request limit applied here.
+    is_media_upload = request.url.path.rstrip("/").endswith("/media/upload")
     content_length = request.headers.get("content-length")
-    if content_length and (not content_length.isdigit() or int(content_length) > settings.max_request_bytes):
+    if not is_media_upload and content_length and (not content_length.isdigit() or int(content_length) > settings.max_request_bytes):
         return Response(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, content="Request too large")
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -363,6 +371,28 @@ def toggle_like(post_id: str, user=Depends(current_user)):
     return response.json()
 
 
+class ReactRequest(BaseModel):
+    reaction: str = Field(min_length=1, max_length=20)
+
+
+@app.post("/posts/{post_id}/react", tags=["posts"])
+def react_to_post(post_id: str, request: ReactRequest, user=Depends(current_user)):
+    response = _storage_request("POST", f"/posts/{post_id}/react",
+                                json={"user_id": user.user_id, "reaction": request.reaction})
+    if response.status_code >= 400:
+        raise api_error(Exception(response.json().get("detail", "Storage error.")), response.status_code)
+    return response.json()
+
+
+@app.post("/posts/{post_id}/share", tags=["posts"])
+def share_post(post_id: str, user=Depends(current_user)):
+    response = _storage_request("POST", f"/posts/{post_id}/share", json={"user_id": user.user_id})
+    if response.status_code >= 400:
+        raise api_error(Exception(response.json().get("detail", "Storage error.")), response.status_code)
+    manager.logger.log("POST_SHARED", user.user_id, f"post={post_id}")
+    return response.json()
+
+
 @app.post("/posts/{post_id}/comments", status_code=status.HTTP_201_CREATED, tags=["posts"])
 def add_comment(post_id: str, request: CommentCreateRequest, user=Depends(current_user)):
     payload = {
@@ -370,10 +400,33 @@ def add_comment(post_id: str, request: CommentCreateRequest, user=Depends(curren
         "author_name": user.name,
         "author_role": user.role,
         "body": request.body,
+        "parent_id": request.parent_id,
     }
     response = _storage_request("POST", f"/posts/{post_id}/comments", json=payload)
     if response.status_code >= 400:
         raise api_error(Exception(response.json().get("detail", "Could not add comment.")), response.status_code)
+    return response.json()
+
+
+@app.post("/posts/{post_id}/comments/{comment_id}/like", tags=["posts"])
+def toggle_comment_like(post_id: str, comment_id: str, user=Depends(current_user)):
+    response = _storage_request("POST", f"/posts/{post_id}/comments/{comment_id}/like", json={"user_id": user.user_id})
+    if response.status_code >= 400:
+        raise api_error(Exception(response.json().get("detail", "Storage error.")), response.status_code)
+    return response.json()
+
+
+@app.put("/posts/{post_id}/comments/{comment_id}", tags=["posts"])
+def edit_comment(post_id: str, comment_id: str, request: CommentEditRequest, user=Depends(current_user)):
+    response = _storage_request("PUT", f"/posts/{post_id}/comments/{comment_id}",
+                                json={"body": request.body},
+                                params={"actor_id": user.user_id, "actor_role": user.role})
+    if response.status_code == 403:
+        raise api_error(Exception("You can only edit your own comments."), status.HTTP_403_FORBIDDEN)
+    if response.status_code == 404:
+        raise api_error(Exception("Comment not found."), status.HTTP_404_NOT_FOUND)
+    if response.status_code >= 400:
+        raise api_error(Exception(response.json().get("detail", "Could not edit comment.")), response.status_code)
     return response.json()
 
 
