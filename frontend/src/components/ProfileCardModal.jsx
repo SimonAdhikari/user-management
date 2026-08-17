@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BadgeCheck, Check, Clock, MessageCircle, Pencil, UserCheck, UserPlus, Users, X } from 'lucide-react'
+import { BadgeCheck, Check, Clock, MessageCircle, Phone, Video, Pencil, UserCheck, UserPlus, Users, X } from 'lucide-react'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
+import { initiateCall } from '../services/callService'
 import {
   useSocial, isFollowing, toggleFollow, friendStatus, sendFriendRequest,
   cancelFriendRequest, respondFriendRequest, removeFriend,
@@ -90,6 +91,8 @@ export default function ProfileCardModal({ user, onClose, onMessage }) {
         </button>
         <button type="button" className={`btn btn-compact pcm-btn ${friendButton.className}`} onClick={handleFriend}>{friendButton.icon} {friendButton.label}</button>
         <button type="button" className="btn btn-compact pcm-btn btn-secondary" onClick={() => { onMessage?.(user); onClose() }}><MessageCircle size={15} /> Message</button>
+        <button type="button" className="btn btn-compact pcm-btn btn-call" onClick={() => { initiateCall(user.user_id, 'audio').catch(err => alert(err.message)); onClose() }}><Phone size={15} /> Call</button>
+        <button type="button" className="btn btn-compact pcm-btn btn-call-video" onClick={() => { initiateCall(user.user_id, 'video').catch(err => alert(err.message)); onClose() }}><Video size={15} /> Video</button>
       </div>}
 
       <button type="button" className="pcm-view" onClick={() => { onClose(); navigate(`/profile/${user.user_id}`) }}>View full profile</button>

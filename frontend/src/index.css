@@ -1073,6 +1073,14 @@ body { background: #f0f2f5; background-image: none; color: #050505; }
 .btn-friend-done { background: #e4e6eb; color: #050505; }
 .btn-message { background: #e4e6eb; color: #050505; }
 .btn-message:hover { background: #d8dadf; }
+.btn-call, .btn-call-video {
+  display: inline-flex; align-items: center; gap: .3rem; border: none; cursor: pointer;
+  padding: .42rem .75rem; border-radius: 8px; font-size: .76rem; font-weight: 700; transition: .15s;
+}
+.btn-call { background: #31a24c; color: #fff; }
+.btn-call:hover { background: #2b8f43; box-shadow: 0 3px 10px rgba(49, 162, 76, .35); }
+.btn-call-video { background: #1877f2; color: #fff; }
+.btn-call-video:hover { background: #0a66c2; box-shadow: 0 3px 10px rgba(24, 119, 242, .35); }
 
 /* ---- People you may know ---- */
 .suggestions { margin-bottom: 1.25rem; }

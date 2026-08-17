@@ -181,7 +181,8 @@ export const mockApi = {
       if (!user || user.password !== data.password) return fail('Invalid email or password.', 401)
       if (user.is_locked) return fail('This account is locked. Contact an administrator.', 403)
       addEvent('LOGIN_SUCCESS', user.user_id)
-      return response({ expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), user: publicUser(user) })
+      const token = `offline_${crypto.randomUUID().replaceAll('-', '')}`
+      return response({ expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), token, user: publicUser(user) })
     }
     if (url === '/setup/administrator') {
       return fail('Offline mode already includes a demo administrator account.', 409)

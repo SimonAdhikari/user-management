@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { BadgeCheck, Check, Clock, LockOpen, Mail, MessageCircle, ShieldCheck, UserCheck, UserPlus, UserRound, Users } from 'lucide-react'
+import { BadgeCheck, Check, Clock, LockOpen, Mail, MessageCircle, Phone, Video, ShieldCheck, UserCheck, UserPlus, UserRound, Users } from 'lucide-react'
 import { api, errorMessage } from '../services/api'
 import { useAuth } from '../context/AuthContext'
+import { initiateCall } from '../services/callService'
 import {
   useSocial, isFollowing, toggleFollow, friendStatus, sendFriendRequest,
   cancelFriendRequest, respondFriendRequest, followerCount, mutualFriendCount, presenceOf,
@@ -104,6 +105,8 @@ function UserList({ users, loading, onUserUpdated, emptyMessage }) {
             </button>
             <FriendButton user={user} me={me} />
             <button type="button" className="btn-message" title="Send message" onClick={() => setChatUser(user)}><MessageCircle size={14} /> Message</button>
+            <button type="button" className="btn-call" title="Start audio call" onClick={() => initiateCall(user.user_id, 'audio').catch(err => alert(err.message))}><Phone size={14} /> Call</button>
+            <button type="button" className="btn-call-video" title="Start video call" onClick={() => initiateCall(user.user_id, 'video').catch(err => alert(err.message))}><Video size={14} /> Video</button>
           </div>}
           {isSelf && <span className="you-pill">You</span>}
           {user.is_locked && <button type="button" className="btn btn-secondary unlock-btn" title="Unlock account" disabled={unlocking === user.user_id} onClick={() => unlock(user.user_id)}><LockOpen size={15} /> {unlocking === user.user_id ? 'Unlocking…' : 'Unlock'}</button>}

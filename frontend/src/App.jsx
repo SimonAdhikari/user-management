@@ -6,6 +6,7 @@ import UserManagement from './pages/UserManagement'
 import Feed from './pages/Feed'
 import Clips from './pages/Clips'
 import Profile from './pages/Profile'
+import CallModal from './components/CallModal'
 import {
   Dashboard, ActivityLogs, MySecurity, Support
 } from './pages/MockPages'
@@ -19,6 +20,7 @@ function ProtectedApp() {
   const { user } = useAuth()
   if (!user) return <AuthPage />
   return (
+    <>
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
@@ -31,6 +33,8 @@ function ProtectedApp() {
           <Route path="support" element={<Support />} />
         </Route>
       </Routes>
+      <CallModal />
+    </>
   )
 }
 

@@ -23,6 +23,9 @@ sessions = SessionStore(settings.session_minutes)
 login_limiter = RateLimiter(limit=5, window_seconds=60)
 bearer = HTTPBearer(auto_error=False)
 STORAGE_SERVER_URL = os.getenv("STORAGE_SERVER_URL", "http://127.0.0.1:8001")
+
+# In-memory call state: call_id -> {initiator, participants, signals: {user_id -> [messages]}}
+active_calls = {}
 app = FastAPI(title="Secure User Management API", version="1.0.0",
               docs_url="/docs" if settings.environment == "development" else None,
               redoc_url=None)
@@ -87,6 +90,28 @@ class CommentCreateRequest(BaseModel):
 
 class CommentEditRequest(BaseModel):
     body: str = Field(min_length=1, max_length=1000)
+
+
+class CallInitiateRequest(BaseModel):
+    """Initiate an audio/video call to peer(s)."""
+    peer_id: str | None = Field(default=None, max_length=40, description="Single peer for 1-to-1 call")
+    peer_ids: list[str] = Field(default_factory=list, max_length=20, description="Multiple peers for group call")
+    call_type: str = Field(default="audio", regex="^(audio|video)$")
+
+
+class CallSignalRequest(BaseModel):
+    """WebRTC signaling message (SDP offer/answer or ICE candidate)."""
+    call_id: str = Field(min_length=1, max_length=60)
+    from_user_id: str = Field(min_length=1, max_length=40)
+    to_user_id: str = Field(min_length=1, max_length=40)
+    message_type: str = Field(regex="^(offer|answer|ice-candidate)$")
+    payload: dict = Field(description="SDP offer/answer or ICE candidate data")
+
+
+class CallResponseRequest(BaseModel):
+    """Accept or decline incoming call."""
+    call_id: str = Field(min_length=1, max_length=60)
+    action: str = Field(regex="^(accept|decline)$")
 
 
 def request_data(request: BaseModel) -> dict:
@@ -440,3 +465,100 @@ def delete_comment(post_id: str, comment_id: str, user=Depends(current_user)):
     if response.status_code >= 400:
         raise api_error(Exception(response.json().get("detail", "Storage error.")), response.status_code)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ============================================================================
+# CALLING & SIGNALING (Audio/Video)
+# ============================================================================
+
+@app.post("/calls/initiate", tags=["calling"])
+def initiate_call(request: CallInitiateRequest, user=Depends(current_user)):
+    """Start a new audio/video call. Returns call_id and sends notifications to peers."""
+    import uuid
+    call_id = f"CALL_{uuid.uuid4().hex[:12].upper()}"
+    peer_ids = [request.peer_id] if request.peer_id else request.peer_ids
+    if not peer_ids or not all(peer_ids):
+        raise api_error(Exception("Must specify at least one peer."), status.HTTP_400_BAD_REQUEST)
+    try:
+        for peer_id in peer_ids:
+            manager.get_user(peer_id)
+    except Exception:
+        raise api_error(Exception("One or more peer IDs do not exist."), status.HTTP_404_NOT_FOUND)
+    active_calls[call_id] = {
+        "initiator": user.user_id,
+        "participants": {user.user_id, *peer_ids},
+        "call_type": request.call_type,
+        "signals": {uid: [] for uid in peer_ids},
+        "created_at": secrets.token_hex(0),  # Just a marker
+    }
+    manager.logger.log("CALL_INITIATED", user.user_id, f"call_id={call_id},peers={','.join(peer_ids)},type={request.call_type}")
+    return {"call_id": call_id, "initiator_id": user.user_id, "peers": peer_ids, "call_type": request.call_type}
+
+
+@app.post("/calls/{call_id}/signal", tags=["calling"])
+def send_signal(call_id: str, request: CallSignalRequest, user=Depends(current_user)):
+    """Send WebRTC signaling message (SDP offer/answer, ICE candidate)."""
+    if call_id not in active_calls:
+        raise api_error(Exception("Call not found."), status.HTTP_404_NOT_FOUND)
+    call = active_calls[call_id]
+    if request.to_user_id not in call["participants"]:
+        raise api_error(Exception("Recipient not in this call."), status.HTTP_400_BAD_REQUEST)
+    if request.to_user_id not in call["signals"]:
+        call["signals"][request.to_user_id] = []
+    call["signals"][request.to_user_id].append({
+        "from": user.user_id,
+        "type": request.message_type,
+        "payload": request.payload,
+        "timestamp": secrets.token_hex(0),
+    })
+    manager.logger.log("SIGNAL_SENT", user.user_id, f"call_id={call_id},to={request.to_user_id},type={request.message_type}")
+    return {"status": "queued"}
+
+
+@app.get("/calls/{call_id}/signals", tags=["calling"])
+def get_signals(call_id: str, user=Depends(current_user)):
+    """Poll for pending WebRTC signals for this user in a call."""
+    if call_id not in active_calls:
+        raise api_error(Exception("Call not found."), status.HTTP_404_NOT_FOUND)
+    call = active_calls[call_id]
+    if user.user_id not in call["participants"]:
+        raise api_error(Exception("You are not in this call."), status.HTTP_403_FORBIDDEN)
+    pending = call["signals"].get(user.user_id, [])
+    call["signals"][user.user_id] = []  # Clear after retrieval
+    return {"signals": pending}
+
+
+@app.post("/calls/{call_id}/respond", tags=["calling"])
+def respond_to_call(call_id: str, request: CallResponseRequest, user=Depends(current_user)):
+    """Accept or decline an incoming call."""
+    if call_id not in active_calls:
+        raise api_error(Exception("Call not found."), status.HTTP_404_NOT_FOUND)
+    call = active_calls[call_id]
+    if user.user_id == call["initiator"]:
+        raise api_error(Exception("Initiator cannot respond to their own call."), status.HTTP_400_BAD_REQUEST)
+    if request.action == "accept":
+        manager.logger.log("CALL_ACCEPTED", user.user_id, f"call_id={call_id}")
+        return {"status": "accepted", "call_type": call["call_type"]}
+    else:
+        manager.logger.log("CALL_DECLINED", user.user_id, f"call_id={call_id}")
+        if user.user_id in call["participants"]:
+            call["participants"].discard(user.user_id)
+        if not call["participants"]:
+            del active_calls[call_id]
+        return {"status": "declined"}
+
+
+@app.post("/calls/{call_id}/end", status_code=status.HTTP_204_NO_CONTENT, tags=["calling"])
+def end_call(call_id: str, user=Depends(current_user)):
+    """End a call (initiator only, or any participant can leave)."""
+    if call_id not in active_calls:
+        raise api_error(Exception("Call not found."), status.HTTP_404_NOT_FOUND)
+    call = active_calls[call_id]
+    if user.user_id not in call["participants"]:
+        raise api_error(Exception("You are not in this call."), status.HTTP_403_FORBIDDEN)
+    call["participants"].discard(user.user_id)
+    if not call["participants"] or user.user_id == call["initiator"]:
+        del active_calls[call_id]
+        manager.logger.log("CALL_ENDED", user.user_id, f"call_id={call_id}")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
