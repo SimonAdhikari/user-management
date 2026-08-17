@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, Activity, Settings, HelpCircle, LogOut, Menu, X, MessageCircle, Clapperboard, Wifi, WifiOff } from 'lucide-react'
+import { Home, Users, Activity, Settings, HelpCircle, LogOut, Menu, X, MessageCircle, Clapperboard, Wifi, WifiOff, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAuth } from './context/AuthContext'
 import { getConnectionState, onConnectionChange } from './services/api'
@@ -30,25 +30,57 @@ function Layout() {
   }, [open])
 
   const routes = [
-    { path: '/', name: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-    { path: '/feed', name: 'Feed', icon: <MessageCircle size={18} /> },
-    { path: '/clips', name: 'Clips', icon: <Clapperboard size={18} /> },
-    { path: '/users', name: 'Users', icon: <Users size={18} /> },
-    { path: '/logs', name: 'Activity', icon: <Activity size={18} /> },
-    { path: '/security', name: 'Security', icon: <Settings size={18} /> },
-    { path: '/support', name: 'Support', icon: <HelpCircle size={18} /> },
+    { path: '/', name: 'Home', icon: <Home size={20} /> },
+    { path: '/feed', name: 'Feed', icon: <MessageCircle size={20} /> },
+    { path: '/clips', name: 'Clips', icon: <Clapperboard size={20} /> },
+    { path: '/users', name: 'Users', icon: <Users size={20} /> },
+    { path: '/logs', name: 'Activity', icon: <Activity size={20} /> },
+    { path: '/security', name: 'Security', icon: <Settings size={20} /> },
+    { path: '/support', name: 'Support', icon: <HelpCircle size={20} /> },
   ]
 
-  // Main sections shown as clickable icon tabs at the top of every page.
-  const quickRoutes = [
-    { path: '/', name: 'Dashboard', icon: <LayoutDashboard size={17} /> },
-    { path: '/feed', name: 'Feed', icon: <MessageCircle size={17} /> },
-    { path: '/clips', name: 'Clips', icon: <Clapperboard size={17} /> },
+  // Facebook-style center tabs shown in the top navigation bar.
+  const centerTabs = [
+    { path: '/', name: 'Home', icon: <Home size={24} /> },
+    { path: '/feed', name: 'Feed', icon: <MessageCircle size={24} /> },
+    { path: '/clips', name: 'Clips', icon: <Clapperboard size={24} /> },
+    { path: '/users', name: 'Users', icon: <Users size={24} /> },
   ]
 
   return (
-    <div className="app-layout">
-      <button className="mobile-menu" onClick={() => setOpen(!open)} aria-label="Toggle navigation" aria-expanded={open}>{open ? <X /> : <Menu />}</button>
+    <div className="app-layout fb-layout">
+      <header className="fb-topbar">
+        <div className="fb-topbar-left">
+          <button className="mobile-menu" onClick={() => setOpen(!open)} aria-label="Toggle navigation" aria-expanded={open}>{open ? <X /> : <Menu />}</button>
+          <NavLink to="/" className="fb-brand" aria-label="Social Hub home">
+            <BrandLogo size={40} className="fb-logo" />
+          </NavLink>
+          <span className="fb-wordmark">socialhub</span>
+          <div className="fb-search" aria-hidden="true"><Search size={16} /><span>Search Social Hub</span></div>
+        </div>
+        <nav className="fb-topbar-tabs" aria-label="Primary navigation">
+          {centerTabs.map(t => (
+            <NavLink
+              key={t.path}
+              to={t.path}
+              end={t.path === '/'}
+              title={t.name}
+              className={({ isActive }) => `fb-tab ${isActive ? 'active' : ''}`}
+            >
+              {t.icon}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="fb-topbar-right">
+          <ConnectionBadge />
+          <NavLink to={`/profile/${user?.user_id || ''}`} className="fb-me">
+            <span className="avatar">{user?.name?.slice(0, 1).toUpperCase()}</span>
+            <strong>{user?.name?.split(' ')[0]}</strong>
+          </NavLink>
+          <button className="fb-iconbtn" onClick={logout} title="Sign out" aria-label="Sign out"><LogOut size={18} /></button>
+        </div>
+      </header>
+
       {open && <div className="sidebar-backdrop" onClick={() => setOpen(false)} aria-hidden="true" />}
       <nav className={`sidebar ${open ? 'open' : ''}`} aria-label="Main navigation">
         <div className="sidebar-header">
@@ -78,20 +110,6 @@ function Layout() {
       </nav>
 
       <main className="main-content">
-        <ConnectionBadge />
-        <nav className="page-tabs" aria-label="Section navigation">
-          {quickRoutes.map(r => (
-            <NavLink
-              key={r.path}
-              to={r.path}
-              end={r.path === '/'}
-              className={({ isActive }) => `page-tab ${isActive ? 'active' : ''}`}
-            >
-              {r.icon}
-              <span>{r.name}</span>
-            </NavLink>
-          ))}
-        </nav>
         <Outlet />
       </main>
     </div>

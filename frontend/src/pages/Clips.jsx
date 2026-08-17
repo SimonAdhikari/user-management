@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Heart, MessageCircle, Share2, Music2, ChevronUp, ChevronDown, Play, Volume2, VolumeX, X, Upload, Send } from 'lucide-react'
+import { NavLink } from 'react-router-dom'
+import { Heart, MessageCircle, Share2, Music2, ChevronUp, ChevronDown, Play, Volume2, VolumeX, X, Upload, Send, Home, Plus, Clapperboard, User as UserIcon } from 'lucide-react'
 import { api, errorMessage } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import ShareModal from '../components/ShareModal'
@@ -329,10 +330,24 @@ export default function Clips() {
         </div>
       )}
 
-      {/* Floating upload button — TikTok "+" style */}
-      <button className="tiktok-upload" onClick={() => setShowUpload(true)} aria-label="Upload clip">
-        <Upload size={22} />
-      </button>
+      {/* TikTok-style bottom navigation */}
+      <nav className="tiktok-bottomnav" aria-label="App navigation">
+        <NavLink to="/" end className={({ isActive }) => `tiktok-navitem ${isActive ? 'active' : ''}`}>
+          <Home size={22} /><span>Home</span>
+        </NavLink>
+        <NavLink to="/feed" className={({ isActive }) => `tiktok-navitem ${isActive ? 'active' : ''}`}>
+          <MessageCircle size={22} /><span>Feed</span>
+        </NavLink>
+        <button className="tiktok-plus" onClick={() => setShowUpload(true)} aria-label="Upload clip">
+          <Plus size={20} strokeWidth={3} />
+        </button>
+        <NavLink to="/clips" className="tiktok-navitem active">
+          <Clapperboard size={22} /><span>Clips</span>
+        </NavLink>
+        <NavLink to={`/profile/${user?.user_id || ''}`} className={({ isActive }) => `tiktok-navitem ${isActive ? 'active' : ''}`}>
+          <UserIcon size={22} /><span>Me</span>
+        </NavLink>
+      </nav>
 
       {showUpload && <UploadClipModal onClose={() => setShowUpload(false)} onUploaded={load} />}
     </div>

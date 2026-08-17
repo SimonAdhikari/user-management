@@ -624,7 +624,20 @@ button, input, select { font: inherit; }
 
 /* ============ TikTok-style Clips page ============ */
 .tiktok-page { position: relative; display: flex; flex-direction: column; height: calc(100vh - 4rem); margin: -2rem; }
+/* On the Clips page: go full-bleed and hide the section tabs (the page has
+   its own TikTok-style bottom navigation instead). */
 .main-content:has(.tiktok-page) { padding: 0; overflow: hidden; }
+.main-content:has(.tiktok-page) .page-tabs { display: none; }
+
+/* Bottom navigation — TikTok style */
+.tiktok-bottomnav { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; align-items: center; justify-content: space-around; padding: .45rem .5rem calc(.45rem + env(safe-area-inset-bottom)); background: rgba(0, 0, 0, .92); backdrop-filter: blur(10px); border-top: 1px solid rgba(255, 255, 255, .08); }
+.tiktok-navitem { display: flex; flex-direction: column; align-items: center; gap: .15rem; background: none; border: none; cursor: pointer; text-decoration: none; color: rgba(255, 255, 255, .55); font-size: .62rem; font-weight: 600; padding: .2rem .6rem; transition: color .15s ease; }
+.tiktok-navitem.active { color: #fff; }
+.tiktok-plus { position: relative; display: grid; place-items: center; width: 46px; height: 32px; border-radius: 9px; border: none; cursor: pointer; color: #000; background: #fff; transition: transform .2s ease; }
+.tiktok-plus::before, .tiktok-plus::after { content: ''; position: absolute; top: 0; bottom: 0; width: 46px; border-radius: 9px; z-index: -1; }
+.tiktok-plus::before { left: -4px; background: #25f4ee; }
+.tiktok-plus::after { right: -4px; background: #fe2c55; }
+.tiktok-plus:hover { transform: scale(1.08); }
 
 /* Top tabs — Following / For You */
 .tiktok-topbar { position: absolute; top: .9rem; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: .9rem; }
@@ -635,8 +648,8 @@ button, input, select { font: inherit; }
 
 .tiktok-error { position: absolute; top: 3.2rem; left: 50%; transform: translateX(-50%); z-index: 20; }
 
-/* Full-bleed vertical scroller */
-.tiktok-stage { position: relative; flex: 1; min-height: 0; display: flex; justify-content: center; background: #000; }
+/* Full-bleed vertical scroller (leaves room for the bottom nav) */
+.tiktok-stage { position: relative; flex: 1; min-height: 0; display: flex; justify-content: center; background: #000; padding-bottom: 56px; }
 .tiktok-scroller { width: 100%; max-width: 520px; height: 100%; overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none; }
 .tiktok-scroller::-webkit-scrollbar { display: none; }
 
@@ -653,7 +666,7 @@ button, input, select { font: inherit; }
 .clip-gradient { position: absolute; inset: auto 0 0 0; height: 45%; background: linear-gradient(to top, rgba(0, 0, 0, .75), transparent); pointer-events: none; }
 
 /* Right action rail */
-.clip-rail { position: absolute; right: .7rem; bottom: 5.2rem; display: flex; flex-direction: column; align-items: center; gap: 1.15rem; z-index: 5; }
+.clip-rail { position: absolute; right: .7rem; bottom: 1.6rem; display: flex; flex-direction: column; align-items: center; gap: 1.15rem; z-index: 5; }
 .clip-action { display: flex; flex-direction: column; align-items: center; gap: .2rem; background: none; border: none; color: #fff; cursor: pointer; font-size: .78rem; font-weight: 700; text-shadow: 0 1px 4px rgba(0, 0, 0, .6); }
 .clip-action-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: rgba(255, 255, 255, .12); backdrop-filter: blur(6px); transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), background .2s ease; }
 .clip-action:hover .clip-action-icon { transform: scale(1.12); background: rgba(255, 255, 255, .22); }
@@ -662,7 +675,7 @@ button, input, select { font: inherit; }
 .clip-avatar { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #071522; background: linear-gradient(135deg, #83efd6, #95a8ff); border: 2px solid #fff; }
 
 /* Bottom info */
-.clip-info { position: absolute; left: 1rem; right: 4.6rem; bottom: 1.2rem; z-index: 5; display: flex; flex-direction: column; gap: .4rem; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, .6); }
+.clip-info { position: absolute; left: 1rem; right: 4.6rem; bottom: 1rem; z-index: 5; display: flex; flex-direction: column; gap: .4rem; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, .6); }
 .clip-info strong { font-size: 1.05rem; }
 .clip-info p { font-size: .9rem; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .clip-sound { display: flex; align-items: center; gap: .4rem; font-size: .8rem; opacity: .9; }
@@ -674,10 +687,6 @@ button, input, select { font: inherit; }
 .tiktok-nav button { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; border: none; background: rgba(255, 255, 255, .14); color: #fff; cursor: pointer; backdrop-filter: blur(6px); transition: all .2s ease; }
 .tiktok-nav button:hover:not(:disabled) { background: rgba(255, 255, 255, .3); transform: scale(1.08); }
 .tiktok-nav button:disabled { opacity: .3; cursor: default; }
-
-/* Floating upload "+" button */
-.tiktok-upload { position: absolute; bottom: 1.2rem; left: 50%; transform: translateX(-50%); z-index: 25; display: grid; place-items: center; width: 52px; height: 36px; border-radius: 10px; border: none; cursor: pointer; color: #fff; background: linear-gradient(90deg, #25f4ee, #fe2c55); box-shadow: 0 6px 20px rgba(254, 44, 85, .4); transition: transform .2s ease, box-shadow .2s ease; }
-.tiktok-upload:hover { transform: translateX(-50%) scale(1.08); box-shadow: 0 8px 26px rgba(254, 44, 85, .55); }
 
 /* Comments panel */
 .clip-comments { position: absolute; left: .6rem; right: .6rem; bottom: .6rem; max-height: 55%; overflow-y: auto; z-index: 10; padding: 1rem; animation: rise-in .3s cubic-bezier(.22, 1, .36, 1) both; }
@@ -702,9 +711,9 @@ button, input, select { font: inherit; }
 
 @media (max-width: 1100px) { .tiktok-nav { right: .6rem; } }
 @media (max-width: 560px) {
-  .tiktok-page { height: calc(100vh - 7rem); }
+  .tiktok-page { height: calc(100vh - 4.25rem); }
   .tiktok-nav { display: none; }
-  .clip-rail { right: .5rem; bottom: 4.8rem; gap: .85rem; }
+  .clip-rail { right: .5rem; gap: .85rem; }
   .clip-action-icon { width: 42px; height: 42px; }
 }
 
@@ -810,4 +819,216 @@ body.drawer-open { overflow: hidden; }
 /* ---- Desktop niceties: keep content readable on wide screens ---- */
 @media (min-width: 1400px) {
   .main-content { padding: 2.5rem 3rem; }
+}
+
+/* ==========================================================================
+   FACEBOOK-STYLE THEME — light UI, white top navbar, blue accents
+   (The Clips page intentionally stays dark, like Facebook Reels.)
+   ========================================================================== */
+:root {
+  --primary: #1877f2;
+  --primary-hover: #166fe5;
+  --bg-color: #f0f2f5;
+  --card-bg: #ffffff;
+  --card-border: #e4e6eb;
+  --text-primary: #050505;
+  --text-secondary: #65676b;
+  --fb-hover: #f2f2f2;
+  --fb-input: #f5f6f7;
+}
+
+body { background: #f0f2f5; background-image: none; color: #050505; }
+
+/* ---- Top navigation bar ---- */
+.fb-topbar { position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 120; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem; padding: 0 1rem; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+.fb-topbar-left { display: flex; align-items: center; gap: .6rem; min-width: 0; }
+.fb-brand { display: grid; place-items: center; flex-shrink: 0; text-decoration: none; }
+.fb-logo.brand-logo { border-radius: 50% !important; background: #1877f2; border: none; box-shadow: none; animation: none; }
+.fb-logo .brand-logo-glow, .fb-logo .brand-logo-shimmer, .fb-logo .brand-logo-orbit, .fb-logo .brand-logo-satellite { display: none; }
+.fb-wordmark { font-weight: 800; font-size: 1.2rem; color: #1877f2; letter-spacing: -.04em; white-space: nowrap; }
+.fb-search { display: inline-flex; align-items: center; gap: .5rem; padding: .5rem .9rem; border-radius: 999px; background: #f0f2f5; color: #65676b; font-size: .9rem; white-space: nowrap; user-select: none; }
+.fb-topbar-tabs { display: flex; align-items: center; justify-content: center; gap: .4rem; height: 100%; }
+.fb-tab { display: grid; place-items: center; width: clamp(64px, 9vw, 112px); height: calc(100% - 12px); margin: 6px 0; border-radius: 10px; color: #65676b; position: relative; text-decoration: none; transition: background .15s ease, color .15s ease; }
+.fb-tab:hover { background: #f0f2f5; }
+.fb-tab.active { color: #1877f2; }
+.fb-tab.active::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: -6px; height: 3px; border-radius: 2px; background: #1877f2; }
+.fb-topbar-right { display: flex; align-items: center; justify-content: flex-end; gap: .6rem; min-width: 0; }
+.fb-me { display: inline-flex; align-items: center; gap: .45rem; padding: .28rem .7rem .28rem .3rem; border-radius: 999px; text-decoration: none; color: #050505; font-size: .9rem; white-space: nowrap; transition: background .15s ease; }
+.fb-me:hover { background: #f0f2f5; }
+.fb-me .avatar { width: 30px; height: 30px; font-size: .72rem; }
+.fb-iconbtn { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: none; background: #e4e6eb; color: #050505; cursor: pointer; transition: background .15s ease; flex-shrink: 0; }
+.fb-iconbtn:hover { background: #d8dadf; }
+
+/* ---- Layout under the topbar ---- */
+.fb-layout .main-content { margin-left: var(--sidebar-width); padding: calc(56px + 1.5rem) 2rem 2rem; }
+.fb-layout .sidebar { top: 56px; height: calc(100vh - 56px); background: #fff; border-right: 1px solid #e4e6eb; backdrop-filter: none; -webkit-backdrop-filter: none; padding-top: 1rem; animation: none; }
+.fb-layout .sidebar-header h1 { color: #050505; background: none; -webkit-background-clip: border-box; -webkit-text-fill-color: #050505; }
+.fb-layout .nav-link { color: #050505; }
+.fb-layout .nav-link:hover { background: var(--fb-hover); color: #050505; transform: none; }
+.fb-layout .nav-link.active { background: rgba(24, 119, 242, .1); color: #1877f2; border-right: none; box-shadow: none; }
+.fb-layout .sidebar-user { border-top-color: #e4e6eb; }
+.fb-layout .sidebar-user span { color: #65676b; }
+.fb-layout .sidebar-user button { color: #65676b; }
+.fb-layout .sidebar-user button:hover { color: #050505; }
+
+/* ---- Cards & panels ---- */
+.glass-panel { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; border: 1px solid #e4e6eb; border-radius: 10px; box-shadow: 0 1px 2px rgba(0, 0, 0, .1); }
+.glass-panel:hover { border-color: #e4e6eb; }
+.page-container::before { background: radial-gradient(circle, rgba(24, 119, 242, .1), rgba(24, 119, 242, .03) 40%, transparent 68%); opacity: .6; }
+
+/* ---- Buttons, forms, alerts ---- */
+.btn { background: #1877f2; }
+.btn:hover { background: #166fe5; box-shadow: 0 4px 12px rgba(24, 119, 242, .35); }
+.btn-secondary { background: #e4e6eb; border: none; color: #050505; }
+.btn-secondary:hover { background: #d8dadf; box-shadow: none; }
+.form-group label { color: #65676b; }
+.form-control { background: var(--fb-input); border: 1px solid #ccd0d5; color: #050505; }
+.form-control:focus { border-color: #1877f2; box-shadow: 0 0 0 3px rgba(24, 119, 242, .18); background: #fff; }
+.form-control::placeholder { color: #90949c; }
+.alert-error { background: #ffebe9; border-color: #ffc9c9; color: #b91c1c; }
+.alert-success { background: #e7f7ef; border-color: #b7e4c7; color: #0a7d43; }
+.eyebrow { color: #1877f2; }
+.icon-button { color: #65676b; }
+.icon-button:hover { background: var(--fb-hover); color: #050505; }
+
+/* ---- Avatars ---- */
+.user-avatar, .avatar { background: linear-gradient(135deg, #5aa7f2, #1877f2); color: #fff; }
+.post-avatar, .comment-avatar, .profile-avatar { background: linear-gradient(135deg, #5aa7f2, #1877f2); }
+
+/* ---- Feed / posts ---- */
+.create-post textarea { background: var(--fb-input); border-color: transparent; color: #050505; }
+.create-post textarea:focus { outline: 2px solid #1877f2; background: #fff; }
+.post-card:hover { transform: translateY(-2px); border-color: #e4e6eb; box-shadow: 0 4px 14px rgba(0, 0, 0, .1); }
+.post-action { color: #65676b; }
+.post-action:hover { background: var(--fb-hover); color: #050505; }
+.post-action.liked { color: #1877f2; }
+.post-action.shared { color: #1877f2; }
+.comment-body, .comment-bubble { background: #f0f2f5; }
+.comment-form input { background: #f0f2f5; border-color: transparent; color: #050505; }
+.comment-form input:focus { outline: 2px solid #1877f2; background: #fff; }
+.comment-edit-form input { background: #fff; border-color: #ccd0d5; color: #050505; }
+.comment-tool { color: #65676b; }
+.comment-tool:hover { background: var(--fb-hover); color: #050505; }
+.comment-tool.liked { color: #1877f2; }
+.replies-toggle { color: #1877f2; }
+.replies-toggle:hover { background: rgba(24, 119, 242, .1); }
+.comment-nested { border-left-color: rgba(24, 119, 242, .3); }
+.repost-banner { background: rgba(24, 119, 242, .1); color: #1877f2; }
+.repost-card { background: #f5f6f7; border-color: #e4e6eb; }
+.repost-form textarea, .share-repost-form textarea { background: var(--fb-input); border-color: #ccd0d5; color: #050505; }
+
+/* ---- Reaction picker ---- */
+.reaction-picker { background: #fff; border-color: #e4e6eb; box-shadow: 0 6px 20px rgba(0, 0, 0, .18); }
+.reaction-option:hover { background: #f0f2f5; }
+.reaction-option.active { background: rgba(24, 119, 242, .15); }
+
+/* ---- Modals ---- */
+.modal-overlay { background: rgba(0, 0, 0, .5); }
+.share-option { background: var(--fb-input); border-color: #e4e6eb; color: #050505; }
+.share-option:hover { border-color: #1877f2; background: rgba(24, 119, 242, .06); }
+.share-ok { color: #0a7d43; }
+
+/* ---- Dashboard widgets ---- */
+.metric-card { background: #fff; border-color: #e4e6eb; color: #1877f2; }
+.metric-card span { color: #65676b; }
+.metric-card strong { color: #050505; }
+.metric-admin { color: #d97706; }
+.metric-safe { color: #0a7d43; }
+.stat-icon { background: rgba(24, 119, 242, .1); color: #1877f2; }
+.icon-chip { color: #1877f2; background: rgba(24, 119, 242, .1); }
+.section-heading:hover .icon-chip { box-shadow: 0 0 20px rgba(24, 119, 242, .2); }
+.visual-page-header { background: linear-gradient(112deg, #1877f2, #42a5f5); border: none; color: #fff; }
+.visual-page-header p { color: rgba(255, 255, 255, .88); }
+.visual-page-header::after { opacity: .18; }
+.header-graphic i { border-color: rgba(255, 255, 255, .4); }
+.radar-core { background: #fff; box-shadow: 0 0 0 10px rgba(255, 255, 255, .14), 0 0 27px rgba(255, 255, 255, .7); }
+.radar-core span { background: linear-gradient(90deg, #fff, transparent); }
+.activity-orbit { background: linear-gradient(130deg, #eaf3ff, #dbeafe); }
+.activity-orbit::before { background: repeating-radial-gradient(circle at 74% 50%, rgba(24, 119, 242, .16) 0 1px, transparent 1px 22px); }
+.orbit-copy h3 { color: #050505; }
+.orbit-copy h3 strong { color: #1877f2; }
+.orbit-copy p { color: #65676b; }
+.orbit-ring { border-color: rgba(24, 119, 242, .3); }
+.ring-two { border-color: rgba(24, 119, 242, .45); }
+.orbit-shield { background: linear-gradient(135deg, #1877f2, #0e5fc2); color: #fff; box-shadow: 0 0 0 13px rgba(24, 119, 242, .12), 0 0 40px rgba(24, 119, 242, .25); }
+.orbit-dot { background: #1877f2; box-shadow: 0 0 12px #1877f2; }
+.dot-two { background: #42a5f5; box-shadow: 0 0 12px #42a5f5; }
+.timeline p { color: #050505; }
+.timeline p::before { border-left-color: #c4c9d0; }
+.timeline small { color: #65676b; }
+.timeline-icon.ok { color: #0a7d43; background: rgba(16, 185, 129, .12); }
+.timeline-icon.warning { color: #b45309; background: rgba(245, 158, 11, .14); }
+.live-pill { color: #1877f2; border-color: rgba(24, 119, 242, .3); }
+.live-pill i { background: #1877f2; box-shadow: 0 0 8px #1877f2; }
+
+/* ---- Users directory / roles ---- */
+.directory-row { background: var(--fb-input); }
+.directory-row:hover { background: #eef0f3; border-color: transparent; }
+.directory-identity span { color: #65676b; }
+.directory-key span { color: #90949c; }
+.directory-key code { color: #1877f2; }
+.role-pill { background: #e4e6eb; color: #050505; }
+.role-admin, .role-administrator { background: rgba(245, 158, 11, .16); color: #b45309; }
+.role-analyst, .role-security-analyst { background: rgba(56, 189, 248, .16); color: #0369a1; }
+.role-user { background: rgba(24, 119, 242, .12); color: #1877f2; }
+.user-privileges { color: #050505; }
+.empty-state, .list-empty { color: #65676b; }
+.empty-state strong, .list-empty strong, .empty-state h2 { color: #050505; }
+.empty-state svg, .list-empty svg { color: #1877f2; }
+.password-field button { color: #65676b; }
+.password-meter { color: #65676b; }
+.meter-track { background: #e4e6eb; }
+.profile-key { background: #f0f2f5; color: #050505; }
+
+/* ---- Offline banner under the topbar ---- */
+.offline-banner { top: calc(56px + .6rem); }
+.offline-banner.offline { background: rgba(255, 235, 233, .95); color: #b45309; border-color: rgba(245, 158, 11, .5); }
+.offline-banner.online { background: rgba(231, 247, 239, .95); color: #0a7d43; border-color: rgba(16, 185, 129, .45); }
+
+/* ---- PWA install prompt ---- */
+.install-prompt-btn { color: #1877f2; border-color: rgba(24, 119, 242, .35); background: rgba(24, 119, 242, .08); }
+.install-prompt-close { color: #90949c; }
+.install-prompt-close:hover { color: #050505; background: var(--fb-hover); }
+
+/* ---- Auth page: Facebook-style split screen ---- */
+.auth-shell { background: #f0f2f5; }
+.auth-brand { background: #f0f2f5; }
+.auth-brand::before { display: none; }
+.auth-brand h1 { color: #1877f2; }
+.auth-brand > p { color: #65676b; }
+.trust-list { color: #050505; }
+.trust-list svg { color: #1877f2; }
+.auth-card-wrap { background: transparent; }
+.auth-card { background: #fff; border: 1px solid #e4e6eb; box-shadow: 0 2px 16px rgba(0, 0, 0, .1); }
+.auth-card-heading p { color: #65676b; }
+.auth-tabs { background: #f0f2f5; }
+.auth-tabs button { color: #65676b; }
+.auth-tabs .selected { background: #fff; color: #1877f2; box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+.auth-form label { color: #050505; }
+.auth-form label small { color: #65676b; }
+.auth-form input { background: var(--fb-input); border: 1px solid #ccd0d5; color: #050505; }
+.auth-form input:focus { background: #fff; border-color: #1877f2; box-shadow: 0 0 0 3px rgba(24, 119, 242, .15); }
+
+/* ---- Clips page stays dark (Facebook Reels style) ---- */
+.tiktok-page { --text-primary: #f8fafc; --text-secondary: #94a3b8; --card-border: rgba(255, 255, 255, .12); }
+.fb-layout .main-content:has(.tiktok-page) { padding: 56px 0 0; }
+.fb-layout .tiktok-page { height: calc(100vh - 56px); margin: 0; }
+.tiktok-page .glass-panel, .tiktok-page .modal-card { background: rgba(16, 28, 47, .97); border-color: rgba(172, 199, 234, .18); color: #f8fafc; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
+
+/* ---- Responsive: Facebook shell ---- */
+@media (max-width: 900px) {
+  .fb-topbar { grid-template-columns: auto 1fr auto; gap: .5rem; }
+  .fb-search, .fb-wordmark { display: none; }
+  .fb-tab { width: clamp(48px, 11vw, 80px); }
+  .fb-layout .main-content { margin-left: 0; padding: calc(56px + 1rem) 1rem 1.5rem; }
+  .fb-layout .sidebar { top: 56px; height: calc(100vh - 56px); transform: translateX(-100%); transition: transform .25s ease; box-shadow: 24px 0 60px rgba(0, 0, 0, .2); }
+  .fb-layout .sidebar.open { transform: translateX(0); }
+  .mobile-menu { position: static; display: grid; place-items: center; width: 38px; height: 38px; border: none; border-radius: 50%; color: #050505; background: #e4e6eb; z-index: auto; top: auto; left: auto; }
+  .offline-banner { top: calc(56px + .5rem); }
+}
+@media (max-width: 560px) {
+  .fb-me strong { display: none; }
+  .fb-me { padding-right: .3rem; }
+  .fb-topbar-tabs { gap: 0; }
+  .fb-layout .tiktok-page { height: calc(100vh - 56px); }
 }
