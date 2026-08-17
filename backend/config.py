@@ -42,4 +42,10 @@ class Settings:
                 raise ValueError("Production requires SUMS_COOKIE_SECURE=true and a SUMS_BOOTSTRAP_KEY.")
             if "*" in origins or "*" in hosts:
                 raise ValueError("Wildcard origins and hosts are prohibited in production.")
+        # In development, allow wildcard for tunnel domains
+        if environment == "development":
+            if "*" not in origins:
+                origins.append("*")
+            if "*" not in hosts:
+                hosts.append("*")
         return cls(base, origins, hosts, minutes, secure_cookie, environment, bootstrap_key, request_bytes)
