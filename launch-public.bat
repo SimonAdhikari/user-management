@@ -49,7 +49,7 @@ echo Waiting for servers to start...
 timeout /t 5 >nul
 
 echo Starting Cloudflare Tunnel...
-start "Cloudflare Tunnel" /B "%CLOUDFLARED%" tunnel --url http://127.0.0.1:4173
+start "Cloudflare Tunnel" "%CLOUDFLARED%" tunnel --url http://127.0.0.1:4173
 
 echo.
 echo ============================================
