@@ -96,7 +96,7 @@ class CallInitiateRequest(BaseModel):
     """Initiate an audio/video call to peer(s)."""
     peer_id: str | None = Field(default=None, max_length=40, description="Single peer for 1-to-1 call")
     peer_ids: list[str] = Field(default_factory=list, max_length=20, description="Multiple peers for group call")
-    call_type: str = Field(default="audio", regex="^(audio|video)$")
+    call_type: str = Field(default="audio", pattern="^(audio|video)$")
 
 
 class CallSignalRequest(BaseModel):
@@ -104,14 +104,14 @@ class CallSignalRequest(BaseModel):
     call_id: str = Field(min_length=1, max_length=60)
     from_user_id: str = Field(min_length=1, max_length=40)
     to_user_id: str = Field(min_length=1, max_length=40)
-    message_type: str = Field(regex="^(offer|answer|ice-candidate)$")
+    message_type: str = Field(pattern="^(offer|answer|ice-candidate)$")
     payload: dict = Field(description="SDP offer/answer or ICE candidate data")
 
 
 class CallResponseRequest(BaseModel):
     """Accept or decline incoming call."""
     call_id: str = Field(min_length=1, max_length=60)
-    action: str = Field(regex="^(accept|decline)$")
+    action: str = Field(pattern="^(accept|decline)$")
 
 
 def request_data(request: BaseModel) -> dict:

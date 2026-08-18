@@ -1,0 +1,2 @@
+# user_id | name | email | role | kyc_status | created_at
+USR_2293609A6E | enc:v1:YCBxQeYCPw9PYNbGdQ9mGtwy-XWv2Xdr2uyYrtnS-z75NWKT0PQ= | enc:v1:KNl6CV18wUYOuId9SNxgdkdFNFVqruEiDiQSc8yrOd4S8k9P4ifdYMFMyyP2xA== | Administrator | unverified | 2026-08-17T15:56:56+00:00
