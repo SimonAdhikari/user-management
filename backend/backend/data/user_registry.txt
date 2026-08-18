@@ -1,2 +1,3 @@
 # user_id | name | email | role | kyc_status | created_at
-USR_2293609A6E | enc:v1:YCBxQeYCPw9PYNbGdQ9mGtwy-XWv2Xdr2uyYrtnS-z75NWKT0PQ= | enc:v1:KNl6CV18wUYOuId9SNxgdkdFNFVqruEiDiQSc8yrOd4S8k9P4ifdYMFMyyP2xA== | Administrator | unverified | 2026-08-17T15:56:56+00:00
+USR_2293609A6E | enc:v1:9RDAy7lIHHKmQjDLsa07x5BOsc8qR4kcOskPj0mYmAHk9Zr2gb4= | enc:v1:TnC0o0ughaoAiR-73ROzFuimHkbu9n3dklzBJxvLbTFJQDQABT3G-XoEFgYEPg== | Administrator | unverified | 2026-08-17T15:56:56+00:00
+USR_68A6315CBE | enc:v1:W_QT6yFCUpDr0XM7mawXgBrzSG-mpBqYutajHLFhHW7gbYlm6Vu7qIk= | enc:v1:XkFtX5AaHbhSc8UBnglzXM2mIM0XpS0IcYZz7p3APn26Y9WFTb3N0UuMQpyDWaTm | User | unverified | 2026-08-18T07:05:25+00:00
