@@ -332,7 +332,7 @@ class UserManager:
             viewer = self.get_user(viewer_id)
             target = self.get_user(target_id)
             return {
-                "user": target.to_dict(),
+                "user": target.to_public_dict(),
                 "is_following": viewer.is_following(target_id),
                 "is_friend": viewer.is_friend(target_id),
                 "is_blocked": viewer.is_blocked(target_id),

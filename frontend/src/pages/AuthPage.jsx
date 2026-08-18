@@ -1,16 +1,14 @@
 import { useState } from 'react'
-import { ArrowRight, KeyRound, LockKeyhole, MailCheck, ShieldCheck, Sparkles, UserPlus } from 'lucide-react'
+import { ArrowRight, LockKeyhole, MailCheck, ShieldCheck, Sparkles, UserPlus, Users } from 'lucide-react'
 import { api, errorMessage } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import BrandLogo from '../components/BrandLogo'
 
-const emptySetup = { user_id: '', name: '', email: '', password: '', setup_key: '', role: 'Administrator' }
 const emptySignup = { name: '', email: '', password: '' }
 
 export default function AuthPage() {
   const [mode, setMode] = useState('login')
   const [loginData, setLoginData] = useState({ email: '', password: '' })
-  const [setupData, setSetupData] = useState(emptySetup)
   const [signupData, setSignupData] = useState(emptySignup)
   const [verifyStep, setVerifyStep] = useState(false)
   const [verifyCode, setVerifyCode] = useState('')
@@ -24,19 +22,6 @@ export default function AuthPage() {
     event.preventDefault(); setLoading(true); setError('')
     try { login((await api.post('/auth/login', loginData)).data) }
     catch (err) { setError(errorMessage(err)) }
-    finally { setLoading(false) }
-  }
-
-  const submitSetup = async (event) => {
-    event.preventDefault(); setLoading(true); setError('')
-    try {
-      const payload = { ...setupData, user_id: setupData.user_id || null }
-      delete payload.setup_key
-      await api.post('/setup/administrator', payload, { headers: { 'X-Setup-Key': setupData.setup_key } })
-      setMode('login')
-      setLoginData({ email: setupData.email, password: setupData.password })
-      setSetupData(emptySetup)
-    } catch (err) { setError(errorMessage(err)) }
     finally { setLoading(false) }
   }
 
@@ -77,7 +62,6 @@ export default function AuthPage() {
 
   const change = (setter, data) => (event) => setter({ ...data, [event.target.name]: event.target.value })
   const isLogin = mode === 'login'
-  const isSignup = mode === 'signup' && !verifyStep
   const isVerify = mode === 'signup' && verifyStep
 
   return <main className="auth-shell">
@@ -87,22 +71,21 @@ export default function AuthPage() {
       <h1>Connect, share, and engage.</h1>
       <p>A secure social platform for posting updates, photos, videos, and connecting with your community.</p>
       <div className="trust-list">
-        <span><LockKeyhole size={18} /> Protected user records</span>
-        <span><KeyRound size={18} /> Secure authentication</span>
-        <span><ShieldCheck size={18} /> Role-based access</span>
+        <span><Users size={18} /> Connect with friends</span>
+        <span><LockKeyhole size={18} /> Real accounts only</span>
+        <span><ShieldCheck size={18} /> Secure authentication</span>
       </div>
     </section>
     <section className="auth-card-wrap">
       <div className="auth-card">
         <div className="auth-card-heading">
           <BrandLogo size={44} className="mini-logo" />
-          <h2>{isLogin ? 'Welcome back' : isVerify ? 'Verify your email' : isSignup ? 'Create your account' : 'First-time setup'}</h2>
-          <p>{isLogin ? 'Sign in to continue to your feed.' : isVerify ? `We sent a 6-digit code to ${signupData.email}.` : isSignup ? 'Join the platform — create a free account.' : 'Create the first administrator account.'}</p>
+          <h2>{isLogin ? 'Welcome back' : isVerify ? 'Verify your email' : 'Create your account'}</h2>
+          <p>{isLogin ? 'Sign in to continue to your feed.' : isVerify ? `We sent a 6-digit code to ${signupData.email}.` : 'Join the platform — create a free account.'}</p>
         </div>
         <div className="auth-tabs">
           <button className={isLogin ? 'selected' : ''} onClick={() => { setMode('login'); setVerifyStep(false); setError(''); setNotice('') }}>Sign in</button>
           <button className={mode === 'signup' ? 'selected' : ''} onClick={() => { setMode('signup'); setError(''); setNotice('') }}>Sign up</button>
-          <button className={mode === 'setup' ? 'selected' : ''} onClick={() => { setMode('setup'); setVerifyStep(false); setError(''); setNotice('') }}>First-time setup</button>
         </div>
         {error && <div className="alert alert-error" role="alert">{error}</div>}
         {notice && !error && <div className="alert alert-info" role="status">{notice}{devCode && <><br /><strong>Dev code: {devCode}</strong> (email delivery not configured)</>}</div>}
@@ -115,18 +98,11 @@ export default function AuthPage() {
           <button className="btn btn-wide" disabled={loading || verifyCode.length !== 6}>{loading ? 'Verifying…' : <><MailCheck size={17} /> Verify & create account</>}</button>
           <button type="button" className="btn btn-wide btn-secondary" disabled={loading} onClick={resendCode}>Resend code</button>
           <button type="button" className="btn btn-wide btn-secondary" onClick={() => { setVerifyStep(false); setVerifyCode(''); setDevCode(''); setNotice('') }}>Back to sign up</button>
-        </form> : isSignup ? <form onSubmit={submitSignup} className="auth-form">
+        </form> : <form onSubmit={submitSignup} className="auth-form">
           <label>Full name<input autoFocus name="name" value={signupData.name} onChange={change(setSignupData, signupData)} placeholder="Your name" required /></label>
           <label>Email <small>Must be a real address — we send a verification code</small><input name="email" type="email" value={signupData.email} onChange={change(setSignupData, signupData)} placeholder="you@example.com" required /></label>
           <label>Password <small>10+ chars, upper/lowercase, digit & symbol</small><input name="password" type="password" value={signupData.password} onChange={change(setSignupData, signupData)} required /></label>
           <button className="btn btn-wide" disabled={loading}>{loading ? 'Sending verification code…' : <><UserPlus size={17} /> Continue</>}</button>
-        </form> : <form onSubmit={submitSetup} className="auth-form">
-          <label>Full name<input autoFocus name="name" value={setupData.name} onChange={change(setSetupData, setupData)} required /></label>
-          <label>Email<input name="email" type="email" value={setupData.email} onChange={change(setSetupData, setupData)} required /></label>
-          <label>User key <small>Optional — generated automatically</small><input name="user_id" value={setupData.user_id} onChange={change(setSetupData, setupData)} placeholder="USR_A1B2C3D4E5" /></label>
-          <label>Password <small>10+ chars, upper/lowercase, digit & symbol</small><input name="password" type="password" value={setupData.password} onChange={change(setSetupData, setupData)} required /></label>
-          <label>Setup key <small>Provided by the system owner</small><input name="setup_key" type="password" value={setupData.setup_key} onChange={change(setSetupData, setupData)} required /></label>
-          <button className="btn btn-wide" disabled={loading}>{loading ? 'Creating secure account…' : <><UserPlus size={17} /> Create administrator</>}</button>
         </form>}
       </div>
     </section>

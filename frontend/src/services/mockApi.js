@@ -4,15 +4,12 @@ const POSTS_KEY = 'sums_offline_posts'
 
 const initialUsers = [
   {
-    user_id: 'ADMIN_DEMO01',
-    name: 'Demo Administrator',
-    email: 'admin@example.test',
+    user_id: 'DEMO_USER01',
+    name: 'Demo User',
+    email: 'demo@example.test',
     password: 'DemoPass1!',
-    role: 'Administrator',
+    role: 'User',
     is_locked: false,
-    kyc_status: 'unverified',
-    kyc_document_type: null,
-    totp_enabled: false,
   },
 ]
 
@@ -31,6 +28,8 @@ const events = () => read(EVENTS_KEY, [])
 const fail = (detail, status = 400) => Promise.reject({ response: { status, data: { detail } } })
 const response = (data, status = 200) => Promise.resolve({ data, status })
 const publicUser = ({ password, ...user }) => user
+// Minimal directory shape, mirroring the backend GET /people response.
+const publicProfile = ({ user_id, name }) => ({ user_id, name, following_count: 0, followers_count: 0, friends_count: 0 })
 
 function addEvent(action, userId, details = '') {
   const record = { timestamp: new Date().toISOString(), action, user_id: userId, details }
@@ -41,12 +40,12 @@ function createUser(data) {
   const records = users()
   const email = data.email.trim().toLowerCase()
   if (records.some((user) => user.email === email)) return fail('A user with this email already exists.', 409)
-  if (!data.name?.trim() || !data.password || !data.role) return fail('Name, password, and role are required.')
+  if (!data.name?.trim() || !data.password) return fail('Name and password are required.')
   const userId = data.user_id?.trim() || `USR_${crypto.randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`
   if (records.some((user) => user.user_id === userId)) return fail('A user with this ID already exists.', 409)
-  const user = { user_id: userId, name: data.name.trim(), email, password: data.password, role: data.role, is_locked: false, kyc_status: 'unverified', kyc_document_type: null, totp_enabled: false }
+  const user = { user_id: userId, name: data.name.trim(), email, password: data.password, role: 'User', is_locked: false }
   saveUsers([...records, user])
-  addEvent('USER_CREATED', userId, `role=${user.role}`)
+  addEvent('USER_CREATED', userId)
   return response({ message: 'User created.', user: publicUser(user) }, 201)
 }
 
@@ -147,7 +146,7 @@ export const mockApi = {
 
   get(url) {
     if (url === '/health') return response({ status: 'ok' })
-    if (url === '/users') return response(users().map(publicUser))
+    if (url === '/people') return response(users().map(publicProfile))
     if (url === '/posts') return response(posts().map(publicPost))
     const userPosts = url.match(/^\/posts\/user\/([^/]+)$/)
     if (userPosts) return response(posts().filter((p) => p.author_id === userPosts[1]).map(publicPost))
@@ -155,19 +154,6 @@ export const mockApi = {
     if (singlePost) {
       const post = findPost(posts(), singlePost[1])
       return post ? response(publicPost(post)) : fail('Post not found.', 404)
-    }
-    if (url === '/reports/activity') {
-      const records = users()
-      return response({
-        total_users: records.length,
-        locked_accounts: records.filter((user) => user.is_locked).length,
-        by_role: records.reduce((roles, user) => ({ ...roles, [user.role]: (roles[user.role] || 0) + 1 }), {}),
-        recent_events: events().slice(-10),
-      })
-    }
-    if (url === '/kyc/status') {
-      const user = users()[0]
-      return response({ kyc_status: user.kyc_status || 'unverified', document_type: user.kyc_document_type || null })
     }
     return fail(`Offline endpoint not implemented: GET ${url}`, 404)
   },
@@ -179,13 +165,13 @@ export const mockApi = {
       const user = users().find((item) =>
         (item.email && item.email.toLowerCase() === identifier) || item.user_id.toLowerCase() === identifier)
       if (!user || user.password !== data.password) return fail('Invalid email or password.', 401)
-      if (user.is_locked) return fail('This account is locked. Contact an administrator.', 403)
+      if (user.is_locked) return fail('This account is temporarily locked after too many failed attempts. Try again later.', 403)
       addEvent('LOGIN_SUCCESS', user.user_id)
       const token = `offline_${crypto.randomUUID().replaceAll('-', '')}`
       return response({ expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), token, user: publicUser(user) })
     }
     if (url === '/setup/administrator') {
-      return fail('Offline mode already includes a demo administrator account.', 409)
+      return fail('Administrator setup is no longer available.', 410)
     }
     // ---- Offline signup with email verification (demo code 123456) ----
     if (url === '/auth/signup') {
@@ -212,36 +198,7 @@ export const mockApi = {
       if ((pending.email || '') !== (data.email || '').trim().toLowerCase()) return fail('No pending verification for this email. Please sign up first.', 400)
       if (data.code !== '123456') return fail('Incorrect verification code. Offline demo code is 123456.', 400)
       localStorage.removeItem('sums_offline_pending_signup')
-      return createUser({ ...pending, role: pending.role || 'User' })
-    }
-    if (url === '/users') return createUser(data)
-    if (url === '/2fa/setup') return response({ secret: 'OFFLINE-DEMO-SECRET', provisioning_uri: 'otpauth://totp/SUMS:offline' })
-    if (url === '/2fa/confirm') {
-      if (data.code !== '123456') return fail('For offline mode, use verification code 123456.')
-      const records = users(); records[0] = { ...records[0], totp_enabled: true }; saveUsers(records)
-      addEvent('TWO_FACTOR_ENABLED', records[0].user_id)
-      return response({ message: 'Two-factor authentication enabled.', totp_enabled: true })
-    }
-    if (url === '/2fa/disable') {
-      if (data.code !== '123456') return fail('For offline mode, use verification code 123456.')
-      const records = users(); records[0] = { ...records[0], totp_enabled: false }; saveUsers(records)
-      addEvent('TWO_FACTOR_DISABLED', records[0].user_id)
-      return response({ message: 'Two-factor authentication disabled.', totp_enabled: false })
-    }
-    if (url === '/kyc/submit') {
-      const records = users(); records[0] = { ...records[0], kyc_status: 'verified', kyc_document_type: data.document_type }; saveUsers(records)
-      addEvent('KYC_VERIFIED', records[0].user_id, `document_type=${data.document_type}`)
-      return response({ message: 'KYC verification completed.', kyc_status: 'verified' })
-    }
-    const unlock = url.match(/^\/users\/([^/]+)\/unlock$/)
-    if (unlock) {
-      const records = users()
-      const index = records.findIndex((user) => user.user_id === unlock[1])
-      if (index === -1) return fail(`No user found with ID '${unlock[1]}'.`, 404)
-      records[index] = { ...records[index], is_locked: false }
-      saveUsers(records)
-      addEvent('ACCOUNT_UNLOCKED', unlock[1])
-      return response(publicUser(records[index]))
+      return createUser(pending)
     }
 
     // ---- Offline social endpoints ----
@@ -371,7 +328,7 @@ export const mockApi = {
       if (!post) return fail('Post not found.', 404)
       const comment = (post.comments || []).find((c) => c.id === editComment[2])
       if (!comment) return fail('Comment not found.', 404)
-      if (comment.author_id !== actor.user_id && actor.role !== 'Administrator') {
+      if (comment.author_id !== actor.user_id) {
         return fail('You can only edit your own comments.', 403)
       }
       comment.body = body
@@ -392,7 +349,7 @@ export const mockApi = {
       if (!post) return fail('Post not found.', 404)
       const comment = (post.comments || []).find((c) => c.id === delComment[2])
       if (!comment) return fail('Comment not found.', 404)
-      if (comment.author_id !== actor.user_id && actor.role !== 'Administrator') {
+      if (comment.author_id !== actor.user_id) {
         return fail('You can only delete your own comments.', 403)
       }
       // Remove the comment and any replies nested under it.
@@ -405,7 +362,7 @@ export const mockApi = {
       const records = posts()
       const post = findPost(records, delPost[1])
       if (!post) return fail('Post not found.', 404)
-      if (post.author_id !== actor.user_id && actor.role !== 'Administrator') {
+      if (post.author_id !== actor.user_id) {
         return fail('You can only delete your own posts.', 403)
       }
       savePosts(records.filter((p) => p.id !== delPost[1]))

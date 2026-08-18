@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BadgeCheck, Ban, Check, Clock, MessageCircle, Phone, Video, Pencil, UserCheck, UserPlus, Users, X } from 'lucide-react'
+import { Ban, Check, Clock, MessageCircle, Phone, Video, Pencil, UserCheck, UserPlus, Users, X } from 'lucide-react'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { initiateCall } from '../services/callService'
@@ -21,7 +21,6 @@ export default function ProfileCardModal({ user, onClose, onMessage }) {
   const isSelf = me?.user_id === user.user_id
   const { bio, cover } = profileExtra(user)
   const presence = presenceOf(user)
-  const verified = user.role === 'Administrator'
 
   useEffect(() => {
     let active = true
@@ -65,9 +64,8 @@ export default function ProfileCardModal({ user, onClose, onMessage }) {
       <div className="pcm-head">
         <div className="pcm-avatar">{user.name.slice(0, 1).toUpperCase()}<span className={`presence-dot ${presence}`} /></div>
         <div className="pcm-title">
-          <h3>{user.name}{verified && <BadgeCheck size={18} className="verified-badge" title="Verified administrator" />}</h3>
+          <h3>{user.name}</h3>
           <div className="pcm-sub">
-            <span className={`role-pill role-${user.role.toLowerCase().replaceAll(' ', '-')}`}>{user.role}</span>
             <code>{user.user_id}</code>
           </div>
         </div>

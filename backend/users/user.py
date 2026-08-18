@@ -265,6 +265,17 @@ class User:
                 "followers_count": len(self._followers),
                 "friends_count": len(self._friends)}
 
+    def to_public_dict(self) -> dict:
+        """Minimal profile shown in the member directory and on profiles.
+
+        Unlike to_dict(), this never exposes email, lock state, or any
+        administrative metadata — only what a social-network profile shows.
+        """
+        return {"user_id": self.user_id, "name": self.name,
+                "following_count": len(self._following),
+                "followers_count": len(self._followers),
+                "friends_count": len(self._friends)}
+
     def to_storage_dict(self) -> dict:
         data = self.to_dict()
         data.update({"password_hash": self.__password_hash, "salt": self.__salt,

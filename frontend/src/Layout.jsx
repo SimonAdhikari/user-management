@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Home, Users, Activity, Settings, HelpCircle, LogOut, Menu, X, MessageCircle, Clapperboard, Wifi, WifiOff, Search } from 'lucide-react'
+import { Home, Users, LogOut, Menu, X, MessageCircle, Clapperboard, Wifi, WifiOff, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAuth } from './context/AuthContext'
 import { getConnectionState, onConnectionChange } from './services/api'
@@ -33,10 +33,7 @@ function Layout() {
     { path: '/', name: 'Home', icon: <Home size={20} /> },
     { path: '/feed', name: 'Feed', icon: <MessageCircle size={20} /> },
     { path: '/clips', name: 'Clips', icon: <Clapperboard size={20} /> },
-    { path: '/users', name: 'Users', icon: <Users size={20} /> },
-    { path: '/logs', name: 'Activity', icon: <Activity size={20} /> },
-    { path: '/security', name: 'Security', icon: <Settings size={20} /> },
-    { path: '/support', name: 'Support', icon: <HelpCircle size={20} /> },
+    { path: '/people', name: 'People', icon: <Users size={20} /> },
   ]
 
   // Facebook-style center tabs shown in the top navigation bar.
@@ -44,7 +41,7 @@ function Layout() {
     { path: '/', name: 'Home', icon: <Home size={24} /> },
     { path: '/feed', name: 'Feed', icon: <MessageCircle size={24} /> },
     { path: '/clips', name: 'Clips', icon: <Clapperboard size={24} /> },
-    { path: '/users', name: 'Users', icon: <Users size={24} /> },
+    { path: '/people', name: 'People', icon: <Users size={24} /> },
   ]
 
   return (
@@ -103,7 +100,7 @@ function Layout() {
         </div>
         <div className="sidebar-user">
           <div className="avatar">{user?.name?.slice(0, 1).toUpperCase()}</div>
-          <div><strong>{user?.name}</strong><span>{user?.role}</span></div>
+          <div><strong>{user?.name}</strong></div>
           <button onClick={logout} title="Sign out" aria-label="Sign out"><LogOut size={16} /></button>
         </div>
         <InstallPrompt />

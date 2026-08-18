@@ -12,7 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from config import Settings
-from exceptions import AuthenticationError, PostNotFoundError, TwoFactorRequiredError, UserManagementError, UserNotFoundError
+from exceptions import AuthenticationError, TwoFactorRequiredError, UserManagementError
 from services import UserManager, VerificationManager
 from utilities import EmailSender, EmailVerifier, RateLimiter, SessionStore
 
@@ -30,11 +30,11 @@ STORAGE_SERVER_URL = os.getenv("STORAGE_SERVER_URL", "http://127.0.0.1:8001")
 
 # In-memory call state: call_id -> {initiator, participants, signals: {user_id -> [messages]}}
 active_calls = {}
-app = FastAPI(title="Secure User Management API", version="1.0.0",
+app = FastAPI(title="Social Hub API", version="2.0.0",
               docs_url="/docs" if settings.environment == "development" else None,
               redoc_url=None)
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True,
-                   allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Authorization", "Content-Type", "X-Setup-Key"])
+                   allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Authorization", "Content-Type"])
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
 if settings.environment == "production":
     app.add_middleware(HTTPSRedirectMiddleware)
@@ -72,15 +72,6 @@ class SignupVerifyRequest(BaseModel):
 
 class SignupResendRequest(BaseModel):
     email: str = Field(min_length=3, max_length=254)
-
-
-class TwoFactorConfirmRequest(BaseModel):
-    code: str = Field(min_length=6, max_length=6)
-
-
-class KycRequest(BaseModel):
-    document_type: str = Field(min_length=1, max_length=40)
-    document_number: str = Field(min_length=4, max_length=40)
 
 
 class MediaItem(BaseModel):
@@ -162,15 +153,6 @@ def current_user(request: Request, credentials: HTTPAuthorizationCredentials | N
         return manager.get_user(user_id)
     except UserManagementError:
         raise api_error(Exception("Session invalid."), status.HTTP_401_UNAUTHORIZED)
-
-
-def require_roles(*roles: str):
-    def check(user=Depends(current_user)):
-        if user.role not in roles:
-            manager.logger.log("ACCESS_DENIED", user.user_id, f"required={','.join(roles)}")
-            raise api_error(Exception("You do not have permission for this action."), status.HTTP_403_FORBIDDEN)
-        return user
-    return check
 
 
 @app.middleware("http")
@@ -278,23 +260,6 @@ def signup_verify(request: SignupVerifyRequest):
     return {"message": "Email verified. Account created. You can sign in now.", "user": user.to_dict()}
 
 
-@app.post("/setup/administrator", status_code=status.HTTP_201_CREATED, tags=["setup"])
-def initial_administrator(http_request: Request, request: UserCreateRequest):
-    """One-time bootstrap. It is unavailable as soon as any account exists."""
-    supplied_key = http_request.headers.get("X-Setup-Key", "")
-    if not settings.bootstrap_key or not secrets.compare_digest(supplied_key, settings.bootstrap_key):
-        manager.logger.log("BOOTSTRAP_DENIED", "SYSTEM")
-        raise api_error(Exception("Initial setup is not authorised."), status.HTTP_403_FORBIDDEN)
-    if manager.users:
-        raise api_error(Exception("Initial setup has already been completed."), status.HTTP_409_CONFLICT)
-    if request.role != "Administrator":
-        raise api_error(Exception("The initial account must be an Administrator."))
-    try:
-        return {"message": "Initial administrator created.", "user": manager.create_user(**request_data(request)).to_dict()}
-    except (UserManagementError, ValueError) as error:
-        raise api_error(error)
-
-
 @app.post("/auth/login", tags=["authentication"])
 def login(request: LoginRequest, http_request: Request, response: Response):
     client_ip = http_request.client.host if http_request.client else "unknown"
@@ -323,89 +288,12 @@ def logout(response: Response, request: Request, _: object = Depends(current_use
     response.delete_cookie("sums_session", httponly=True, secure=settings.cookie_secure, samesite="lax", path="/")
 
 
-@app.get("/users", tags=["users"])
-def get_users(_: object = Depends(require_roles("Administrator"))):
-    return [user.to_dict() for user in manager.users]
-
-
-@app.post("/users", status_code=status.HTTP_201_CREATED, tags=["users"])
-def create_user(request: UserCreateRequest, actor=Depends(require_roles("Administrator"))):
-    try:
-        user = manager.create_user(**request_data(request))
-        manager.logger.log("USER_CREATED_BY_ADMIN", user.user_id, f"actor={actor.user_id}")
-        return {"message": "User created.", "user": user.to_dict()}
-    except (UserManagementError, ValueError) as error:
-        raise api_error(error)
-
-
-@app.post("/users/{user_id}/unlock", tags=["users"])
-def unlock(user_id: str, actor=Depends(require_roles("Administrator"))):
-    try:
-        user = manager.unlock_user(user_id)
-        manager.logger.log("ACCOUNT_UNLOCKED_BY_ADMIN", user.user_id, f"actor={actor.user_id}")
-        return user.to_dict()
-    except UserManagementError as error:
-        raise api_error(error, status.HTTP_404_NOT_FOUND)
-
-
-@app.get("/privileges", tags=["users"])
-def privileges(user=Depends(current_user)):
-    return {"user_id": user.user_id, "privileges": user.display_privileges()}
-
-
-@app.get("/reports/activity", tags=["reports"])
-def report(_: object = Depends(require_roles("Administrator", "Security Analyst"))):
-    return manager.activity_report()
-
-
-@app.post("/2fa/setup", tags=["two-factor"])
-def twofa_setup(user=Depends(current_user)):
-    """Begin TOTP enrolment. Returns the secret and an otpauth:// URI for QR scanning."""
-    return manager.begin_2fa_setup(user.user_id)
-
-
-@app.post("/2fa/confirm", tags=["two-factor"])
-def twofa_confirm(request: TwoFactorConfirmRequest, user=Depends(current_user)):
-    """Activate 2FA after the user proves they can generate a valid code."""
-    try:
-        updated = manager.confirm_2fa_setup(user.user_id, request.code)
-        return {"message": "Two-factor authentication enabled.", "totp_enabled": updated.totp_enabled}
-    except ValueError as error:
-        raise api_error(error)
-
-
-@app.post("/2fa/disable", tags=["two-factor"])
-def twofa_disable(request: TwoFactorConfirmRequest, user=Depends(current_user)):
-    """Disable 2FA; a valid current code is required as proof of possession."""
-    if not user.verify_totp(request.code):
-        raise api_error(Exception("Invalid authentication code."), status.HTTP_401_UNAUTHORIZED)
-    manager.disable_2fa(user.user_id)
-    return {"message": "Two-factor authentication disabled.", "totp_enabled": False}
-
-
-@app.post("/kyc/submit", tags=["kyc"])
-def kyc_submit(request: KycRequest, user=Depends(current_user)):
-    """Submit KYC documents to verify identity."""
-    try:
-        updated = manager.submit_kyc(user.user_id, request.document_type, request.document_number)
-        return {"message": "KYC verification completed.", "kyc_status": updated.kyc_status}
-    except ValueError as error:
-        raise api_error(error)
-
-
-@app.get("/kyc/status", tags=["kyc"])
-def kyc_status(user=Depends(current_user)):
-    """Check current KYC status."""
-    return {"kyc_status": user.kyc_status, "document_type": user.kyc_document_type}
-
-
-@app.get("/identify/{user_id}", tags=["identity"])
-def identify_user(user_id: str, _: object = Depends(require_roles("Administrator", "Security Analyst"))):
-    """Re-identify a known user from the plain-text registry."""
-    try:
-        return manager.identify_user(user_id)
-    except UserNotFoundError as error:
-        raise api_error(error, status.HTTP_404_NOT_FOUND)
+@app.get("/people", tags=["people"])
+def list_people(user=Depends(current_user)):
+    """Public member directory. Any signed-in member can browse profiles;
+    users blocked in either direction are hidden."""
+    return [member.to_public_dict() for member in manager.users
+            if not user.is_blocked(member.user_id) and not member.is_blocked(user.user_id)]
 
 
 # ============================================================================

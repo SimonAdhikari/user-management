@@ -271,11 +271,11 @@ def create_post(request: PostCreateRequest):
 
 
 @app.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_post(post_id: str, actor_id: str, actor_role: str):
+def delete_post(post_id: str, actor_id: str, actor_role: str = ""):
     with store._lock:
         for index, post in enumerate(store._posts):
             if post["id"] == post_id:
-                if post["author_id"] != actor_id and actor_role != "Administrator":
+                if post["author_id"] != actor_id:
                     raise HTTPException(status_code=403, detail="You can only delete your own posts.")
                 store._posts.pop(index)
                 store._save()
@@ -384,14 +384,14 @@ def toggle_comment_like(post_id: str, comment_id: str, request: LikeRequest):
 
 
 @app.put("/posts/{post_id}/comments/{comment_id}")
-def edit_comment(post_id: str, comment_id: str, request: CommentEditRequest, actor_id: str, actor_role: str):
+def edit_comment(post_id: str, comment_id: str, request: CommentEditRequest, actor_id: str, actor_role: str = ""):
     cleaned = _validate_body(request.body)
     with store._lock:
         for post in store._posts:
             if post["id"] == post_id:
                 for comment in post.get("comments", []):
                     if comment["id"] == comment_id:
-                        if comment["author_id"] != actor_id and actor_role != "Administrator":
+                        if comment["author_id"] != actor_id:
                             raise HTTPException(status_code=403, detail="You can only edit your own comments.")
                         comment["body"] = cleaned
                         comment["edited"] = True
@@ -402,13 +402,13 @@ def edit_comment(post_id: str, comment_id: str, request: CommentEditRequest, act
 
 
 @app.delete("/posts/{post_id}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_comment(post_id: str, comment_id: str, actor_id: str, actor_role: str):
+def delete_comment(post_id: str, comment_id: str, actor_id: str, actor_role: str = ""):
     with store._lock:
         for post in store._posts:
             if post["id"] == post_id:
                 for index, comment in enumerate(post["comments"]):
                     if comment["id"] == comment_id:
-                        if comment["author_id"] != actor_id and actor_role != "Administrator":
+                        if comment["author_id"] != actor_id:
                             raise HTTPException(status_code=403, detail="You can only delete your own comments.")
                         post["comments"].pop(index)
                         store._save()

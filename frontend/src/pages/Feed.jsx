@@ -34,7 +34,6 @@ function RepostCard({ repost }) {
       <div className="post-avatar small">{repost.author_name?.slice(0, 1).toUpperCase()}</div>
       <div className="post-author">
         <strong>{repost.author_name}</strong>
-        <span className={`role-pill role-${(repost.author_role || 'user').toLowerCase().replace(/\s+/g, '-')}`}>{repost.author_role}</span>
         <time>{formatTime(repost.created_at)}</time>
       </div>
     </header>
@@ -57,7 +56,7 @@ function RepostCard({ repost }) {
   </div>
 }
 
-function PostCard({ post, currentUser, onChange, onDelete }) {
+export function PostCard({ post, currentUser, onChange, onDelete }) {
   const [showComments, setShowComments] = useState(false)
   const [showShare, setShowShare] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -119,14 +118,13 @@ function PostCard({ post, currentUser, onChange, onDelete }) {
     await onChange()
   }
 
-  const canDelete = currentUser?.user_id === post.author_id || currentUser?.role === 'Administrator'
+  const canDelete = currentUser?.user_id === post.author_id
 
   return <article className="post-card glass-panel">
     <header className="post-header">
       <div className="post-avatar">{post.author_name?.slice(0, 1).toUpperCase() || '?'}</div>
       <div className="post-author">
         <strong>{post.author_name}</strong>
-        <span className={`role-pill role-${(post.author_role || 'user').toLowerCase().replace(/\s+/g, '-')}`}>{post.author_role}</span>
         <time>{formatTime(post.created_at)}</time>
       </div>
       {canDelete && <button className="icon-button" onClick={() => onDelete(post.id)} title="Delete post" aria-label="Delete post"><Trash2 size={16} /></button>}
@@ -179,7 +177,7 @@ function PostCard({ post, currentUser, onChange, onDelete }) {
   </article>
 }
 
-function CreatePost({ onCreated }) {
+export function CreatePost({ onCreated }) {
   const { user } = useAuth()
   const [body, setBody] = useState('')
   const [files, setFiles] = useState([])

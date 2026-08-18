@@ -2,14 +2,12 @@ import { HashRouter, Routes, Route, useParams } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import AuthPage from './pages/AuthPage'
 import Layout from './Layout'
-import UserManagement from './pages/UserManagement'
+import Home from './pages/Home'
 import Feed from './pages/Feed'
 import Clips from './pages/Clips'
+import People from './pages/People'
 import Profile from './pages/Profile'
 import CallModal from './components/CallModal'
-import {
-  Dashboard, ActivityLogs, MySecurity, Support
-} from './pages/MockPages'
 
 function ProfileRoute() {
   const { userId } = useParams()
@@ -23,14 +21,11 @@ function ProtectedApp() {
     <>
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<Home />} />
           <Route path="feed" element={<Feed />} />
           <Route path="clips" element={<Clips />} />
+          <Route path="people" element={<People />} />
           <Route path="profile/:userId" element={<ProfileRoute />} />
-          <Route path="users" element={<UserManagement />} />
-          <Route path="logs" element={<ActivityLogs />} />
-          <Route path="security" element={<MySecurity />} />
-          <Route path="support" element={<Support />} />
         </Route>
       </Routes>
       <CallModal />

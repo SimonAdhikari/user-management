@@ -349,7 +349,7 @@ Built as a **secure, offline-first social media platform** with:
 
 ## ✨ Ready to Go!
 
-**Open your public URL in any browser:**
+**Open your public URL in any browser:**.
 ```
 https://november-pub-pmid-ahead.trycloudflare.com
 ```

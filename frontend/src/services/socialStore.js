@@ -219,16 +219,10 @@ export const sendMessage = (me, them, body) => pushMessage(me, them, body)
 export const pushReply = (me, them, body) => pushMessage(them, me, body)
 
 /* ----------------------------- Profile extras --------------------------- */
-const DEFAULT_BIOS = {
-  Administrator: 'Keeping this community safe ✨',
-  'Security Analyst': 'Watching the signals 📡',
-  User: 'Living my best life 🌱',
-}
-
 export function profileExtra(user) {
   const extra = load().profiles[user.user_id] || {}
   return {
-    bio: extra.bio || DEFAULT_BIOS[user.role] || 'Hey there! I am using Social Hub.',
+    bio: extra.bio || 'Hey there! I am using Social Hub.',
     cover: hashOf(user.user_id) % 6,
   }
 }

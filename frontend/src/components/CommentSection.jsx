@@ -23,7 +23,7 @@ function CommentItem({ comment, replies, depth, postId, currentUser, onChanged }
   const [collapsed, setCollapsed] = useState(false)
 
   const isOwner = currentUser?.user_id === comment.author_id
-  const canModerate = isOwner || currentUser?.role === 'Administrator'
+  const canModerate = isOwner
 
   const handleLike = async () => {
     try {
@@ -73,7 +73,6 @@ function CommentItem({ comment, replies, depth, postId, currentUser, onChanged }
         <div className="comment-bubble">
           <div className="comment-meta">
             <strong>{comment.author_name}</strong>
-            <span className={`role-pill role-${(comment.author_role || 'user').toLowerCase().replace(/\s+/g, '-')}`}>{comment.author_role}</span>
             <time>{formatTime(comment.created_at)}</time>
             {comment.edited && <span className="comment-edited">edited</span>}
           </div>
