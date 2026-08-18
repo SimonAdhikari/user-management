@@ -139,6 +139,21 @@ def api_error(error: Exception, code: int = 400) -> HTTPException:
     return HTTPException(status_code=code, detail=str(error))
 
 
+def client_ip(request: Request) -> str:
+    """Best-effort real client IP.
+
+    Behind a reverse proxy or a Cloudflare tunnel every connection arrives
+    from 127.0.0.1, so the original client address is read from the
+    X-Forwarded-For chain (first hop = the real client).
+    """
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        first = forwarded.split(",")[0].strip()
+        if first:
+            return first
+    return request.client.host if request.client else "unknown"
+
+
 def current_user(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
     # Browser clients use an HttpOnly cookie; Bearer is retained for controlled API clients.
     token = request.cookies.get("sums_session")
@@ -160,7 +175,10 @@ async def security_headers(request: Request, call_next):
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         origin = request.headers.get("origin")
         # Browser state-changing requests must originate from an explicitly trusted UI.
-        if origin and origin not in settings.cors_origins:
+        # A wildcard origin ("*") — added automatically in development — allows any
+        # origin, which is required when the app is served through a public tunnel
+        # (the browser origin is the tunnel domain, not localhost).
+        if origin and "*" not in settings.cors_origins and origin not in settings.cors_origins:
             return Response(status_code=status.HTTP_403_FORBIDDEN, content="Blocked origin")
     # Media uploads are validated for size on the storage server (25 MB limit),
     # so they are exempt from the small JSON-body request limit applied here.
@@ -208,9 +226,9 @@ def signup(http_request: Request, request: UserCreateRequest):
     enters the one-time code emailed to them (/auth/signup/verify)."""
     if request.role != "User":
         raise api_error(Exception("Self-service accounts are created with the standard User role."), status.HTTP_400_BAD_REQUEST)
-    client_ip = http_request.client.host if http_request.client else "unknown"
-    if not signup_limiter.allowed(client_ip):
-        manager.logger.log("SIGNUP_RATE_LIMITED", request.email, f"ip={client_ip}")
+    client_ip_addr = client_ip(http_request)
+    if not signup_limiter.allowed(client_ip_addr):
+        manager.logger.log("SIGNUP_RATE_LIMITED", request.email, f"ip={client_ip_addr}")
         raise api_error(Exception("Too many signup attempts. Try again later."), status.HTTP_429_TOO_MANY_REQUESTS)
     email = request.email.strip().lower()
     # Reject fake / disposable / undeliverable addresses before anything else.
@@ -230,8 +248,8 @@ def signup(http_request: Request, request: UserCreateRequest):
 @app.post("/auth/signup/resend", tags=["authentication"])
 def signup_resend(http_request: Request, request: SignupResendRequest):
     """Resend the verification code for a pending signup."""
-    client_ip = http_request.client.host if http_request.client else "unknown"
-    if not signup_limiter.allowed(client_ip):
+    client_ip_addr = client_ip(http_request)
+    if not signup_limiter.allowed(client_ip_addr):
         raise api_error(Exception("Too many attempts. Try again later."), status.HTTP_429_TOO_MANY_REQUESTS)
     email = request.email.strip().lower()
     try:
@@ -262,9 +280,9 @@ def signup_verify(request: SignupVerifyRequest):
 
 @app.post("/auth/login", tags=["authentication"])
 def login(request: LoginRequest, http_request: Request, response: Response):
-    client_ip = http_request.client.host if http_request.client else "unknown"
-    if not login_limiter.allowed(client_ip):
-        manager.logger.log("LOGIN_RATE_LIMITED", request.email, f"ip={client_ip}")
+    client_ip_addr = client_ip(http_request)
+    if not login_limiter.allowed(client_ip_addr):
+        manager.logger.log("LOGIN_RATE_LIMITED", request.email, f"ip={client_ip_addr}")
         raise api_error(Exception("Too many login attempts. Try again later."), status.HTTP_429_TOO_MANY_REQUESTS)
     try:
         user = manager.authenticate_by_email(request.email, request.password, request.totp_code)

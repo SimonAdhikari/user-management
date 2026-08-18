@@ -113,7 +113,7 @@ if ($tunnelUrl) {
 Write-Host ""
 Write-Host "Test accounts:" -ForegroundColor White
 Write-Host "  Online:  demo@test.com / Demo@Pass123!" -ForegroundColor Gray
-Write-Host "  Offline: admin@example.test / DemoPass1!" -ForegroundColor Gray
+Write-Host "  Offline: demo@example.test / DemoPass1!" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Press Ctrl+C to stop all servers..." -ForegroundColor Gray
 

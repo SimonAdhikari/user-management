@@ -66,7 +66,7 @@ echo Check the "Cloudflare Tunnel" window for the public https://...trycloudflar
 echo.
 echo Test accounts:
 echo   Online:  demo@test.com / Demo@Pass123!
-echo   Offline: admin@example.test / DemoPass1!
+echo   Offline: demo@example.test / DemoPass1!
 echo.
 echo Press Ctrl+C in each window to stop servers...
 echo.

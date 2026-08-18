@@ -63,16 +63,18 @@ export default defineConfig({
     },
   },
   preview: {
-    allowedHosts: [
-      '127.0.0.1',
-      'localhost',
-      '192.168.1.80',
-      '.trycloudflare.com',  // Allow all Cloudflare tunnel domains
-    ],
+    // Allow the preview server to be reached from any host — local IPs, LAN,
+    // and public Cloudflare tunnel domains — so it works on every device.
+    allowedHosts: true,
+    // Bind to all network interfaces so LAN devices can reach the app too.
+    host: true,
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
+        // Forward the real client IP (X-Forwarded-For) so the backend can
+        // rate-limit each device separately instead of seeing 127.0.0.1.
+        xfwd: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/media': {
