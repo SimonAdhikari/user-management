@@ -114,6 +114,19 @@ class CallResponseRequest(BaseModel):
     action: str = Field(pattern="^(accept|decline)$")
 
 
+# Social features request models
+class FollowRequest(BaseModel):
+    target_user_id: str = Field(min_length=1, max_length=40)
+
+
+class FriendRequestAction(BaseModel):
+    target_user_id: str = Field(min_length=1, max_length=40)
+
+
+class BlockRequest(BaseModel):
+    target_user_id: str = Field(min_length=1, max_length=40)
+
+
 def request_data(request: BaseModel) -> dict:
     return request.model_dump() if hasattr(request, "model_dump") else request.dict()
 
