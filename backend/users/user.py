@@ -24,6 +24,13 @@ class User:
         self._kyc_document_number = None
         self._totp_secret = None
         self._totp_enabled = False
+        # Social features
+        self._following: set[str] = set()      # Users this user is following
+        self._followers: set[str] = set()      # Users following this user
+        self._friends: set[str] = set()        # Mutual friends (both follow each other)
+        self._blocked: set[str] = set()        # Users blocked by this user
+        self._friend_requests_sent: set[str] = set()   # Pending friend requests sent
+        self._friend_requests_received: set[str] = set()  # Pending friend requests received
 
     @property
     def user_id(self) -> str: return self._user_id
@@ -73,6 +80,37 @@ class User:
         self._kyc_status = "unverified"
         self._kyc_document_type = None
         self._kyc_document_number = None
+
+    # Social features properties
+    @property
+    def following(self) -> set[str]:
+        """Users this user is following."""
+        return self._following.copy()
+
+    @property
+    def followers(self) -> set[str]:
+        """Users following this user."""
+        return self._followers.copy()
+
+    @property
+    def friends(self) -> set[str]:
+        """Mutual friends (both follow each other)."""
+        return self._friends.copy()
+
+    @property
+    def blocked(self) -> set[str]:
+        """Users blocked by this user."""
+        return self._blocked.copy()
+
+    @property
+    def friend_requests_sent(self) -> set[str]:
+        """Pending friend requests sent by this user."""
+        return self._friend_requests_sent.copy()
+
+    @property
+    def friend_requests_received(self) -> set[str]:
+        """Pending friend requests received by this user."""
+        return self._friend_requests_received.copy()
 
     @property
     def totp_enabled(self) -> bool: return self._totp_enabled
