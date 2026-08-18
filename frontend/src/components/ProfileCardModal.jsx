@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BadgeCheck, Check, Clock, MessageCircle, Phone, Video, Pencil, UserCheck, UserPlus, Users, X } from 'lucide-react'
+import { BadgeCheck, Ban, Check, Clock, MessageCircle, Phone, Video, Pencil, UserCheck, UserPlus, Users, X } from 'lucide-react'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { initiateCall } from '../services/callService'
 import {
   useSocial, isFollowing, toggleFollow, friendStatus, sendFriendRequest,
-  cancelFriendRequest, respondFriendRequest, removeFriend,
+  cancelFriendRequest, respondFriendRequest, removeFriend, isBlocked, blockUser, unblockUser,
   followerCount, followingCount, mutualFriendCount, presenceOf, profileExtra, setBio,
 } from '../services/socialStore'
 
@@ -34,12 +34,21 @@ export default function ProfileCardModal({ user, onClose, onMessage }) {
   const following = isFollowing(me?.user_id, user.user_id)
   const status = friendStatus(me?.user_id, user.user_id)
   const mutual = mutualFriendCount(me?.user_id, user.user_id)
+  const blocked = isBlocked(me?.user_id, user.user_id)
 
   const handleFriend = () => {
     if (status === 'none') sendFriendRequest(me.user_id, user.user_id)
     else if (status === 'outgoing') cancelFriendRequest(me.user_id, user.user_id)
     else if (status === 'incoming') respondFriendRequest(me.user_id, user.user_id, true)
     else if (status === 'friends' && confirm(`Remove ${user.name} from your friends?`)) removeFriend(me.user_id, user.user_id)
+  }
+
+  const handleBlock = () => {
+    if (blocked) {
+      unblockUser(me.user_id, user.user_id)
+    } else if (confirm(`Block ${user.name}? They won't be able to follow, message, or friend you.`)) {
+      blockUser(me.user_id, user.user_id)
+    }
   }
 
   const friendButton = {
@@ -93,6 +102,9 @@ export default function ProfileCardModal({ user, onClose, onMessage }) {
         <button type="button" className="btn btn-compact pcm-btn btn-secondary" onClick={() => { onMessage?.(user); onClose() }}><MessageCircle size={15} /> Message</button>
         <button type="button" className="btn btn-compact pcm-btn btn-call" onClick={() => { initiateCall(user.user_id, 'audio').catch(err => alert(err.message)); onClose() }}><Phone size={15} /> Call</button>
         <button type="button" className="btn btn-compact pcm-btn btn-call-video" onClick={() => { initiateCall(user.user_id, 'video').catch(err => alert(err.message)); onClose() }}><Video size={15} /> Video</button>
+        <button type="button" className={`btn btn-compact pcm-btn ${blocked ? 'btn-secondary' : 'btn-danger'}`} onClick={handleBlock}>
+          <Ban size={15} /> {blocked ? 'Unblock' : 'Block'}
+        </button>
       </div>}
 
       <button type="button" className="pcm-view" onClick={() => { onClose(); navigate(`/profile/${user.user_id}`) }}>View full profile</button>

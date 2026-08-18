@@ -1,16 +1,62 @@
 import { useEffect, useReducer } from 'react'
+import { api, getConnectionState } from './api'
 
 // ---------------------------------------------------------------------------
 // Client-side social graph: follows, friend requests, friendships, messages
 // and profile extras (bio/cover). Stored in localStorage so the features work
-// identically in online and offline modes (the backend has no social API yet).
+// identically in online and offline modes. When online, every mutation is
+// also synced to the backend social API (/social/*) so relationships persist
+// server-side and are shared across devices.
 // ---------------------------------------------------------------------------
 const SOCIAL_KEY = 'sums_social_graph'
+
+// Fire-and-forget backend sync. Errors are swallowed so the local graph
+// always stays usable (offline mode relies on localStorage alone).
+function syncToBackend(fn) {
+  if (getConnectionState() !== 'online') return
+  Promise.resolve().then(fn).catch(() => {})
+}
+
+// Pull the authoritative social graph from the backend and merge it into the
+// local cache. Called after login / on reconnect.
+export async function loadSocialFromBackend() {
+  if (getConnectionState() !== 'online') return
+  try {
+    const { data } = await api.get('/social/info')
+    const graph = load()
+    // The backend returns arrays of user IDs for the current user.
+    // We store them keyed by the current user id, which we infer from the
+    // first entry in any of the lists, or fall back to a stored "me" marker.
+    const me = graph._me
+    if (!me) return
+    graph.follows[me] = data.following || []
+    graph.friends[me] = data.friends || []
+    graph.blocked[me] = data.blocked || []
+    graph.friendRequests[me] = data.friend_requests_sent || []
+    // Incoming requests are stored under the requester's key in the local
+    // model, so we map them back.
+    ;(data.friend_requests_received || []).forEach((requester) => {
+      if (!graph.friendRequests[requester]) graph.friendRequests[requester] = []
+      if (!graph.friendRequests[requester].includes(me)) graph.friendRequests[requester].push(me)
+    })
+    save()
+  } catch {
+    /* offline or not authenticated — keep local graph */
+  }
+}
+
+// Remember which user id the local graph belongs to so loadSocialFromBackend
+// can merge server data into the right slot.
+export function setSocialOwner(userId) {
+  const graph = load()
+  graph._me = userId
+  save()
+}
 
 const listeners = new Set()
 let cache = null
 
-const emptyGraph = () => ({ follows: {}, friendRequests: {}, friends: {}, messages: {}, profiles: {} })
+const emptyGraph = () => ({ follows: {}, friendRequests: {}, friends: {}, blocked: {}, messages: {}, profiles: {} })
 
 function load() {
   if (cache) return cache
@@ -57,10 +103,14 @@ export const isFollowing = (me, them) => list(load().follows, me).includes(them)
 export function toggleFollow(me, them) {
   const graph = load()
   const current = list(graph.follows, me)
-  graph.follows[me] = current.includes(them)
-    ? current.filter((id) => id !== them)
-    : [...current, them]
+  const nowFollowing = !current.includes(them)
+  graph.follows[me] = nowFollowing
+    ? [...current, them]
+    : current.filter((id) => id !== them)
   save()
+  syncToBackend(() => nowFollowing
+    ? api.post('/social/follow', { target_user_id: them })
+    : api.delete(`/social/follow/${them}`))
 }
 
 export const followingCount = (me) => list(load().follows, me).length
@@ -85,12 +135,14 @@ export function sendFriendRequest(me, them) {
     graph.friendRequests[me] = [...list(graph.friendRequests, me), them]
   }
   save()
+  syncToBackend(() => api.post('/social/friend-request', { target_user_id: them }))
 }
 
 export function cancelFriendRequest(me, them) {
   const graph = load()
   graph.friendRequests[me] = list(graph.friendRequests, me).filter((id) => id !== them)
   save()
+  syncToBackend(() => api.delete(`/social/friend-request/${them}`))
 }
 
 export function respondFriendRequest(me, them, accept) {
@@ -101,6 +153,9 @@ export function respondFriendRequest(me, them, accept) {
     if (!list(graph.friends, them).includes(me)) graph.friends[them] = [...list(graph.friends, them), me]
   }
   save()
+  syncToBackend(() => accept
+    ? api.post('/social/friend-request/accept', { target_user_id: them })
+    : api.post('/social/friend-request/decline', { target_user_id: them }))
 }
 
 export function removeFriend(me, them) {
@@ -108,6 +163,7 @@ export function removeFriend(me, them) {
   graph.friends[me] = list(graph.friends, me).filter((id) => id !== them)
   graph.friends[them] = list(graph.friends, them).filter((id) => id !== me)
   save()
+  syncToBackend(() => api.delete(`/social/friend/${them}`))
 }
 
 export const friendsOf = (me) => list(load().friends, me)
@@ -116,6 +172,30 @@ export function mutualFriendCount(me, them) {
   const mine = new Set(friendsOf(me))
   const real = friendsOf(them).filter((id) => mine.has(id)).length
   return real + (hashOf(pair(me, them)) % 7)
+}
+
+/* -------------------------------- Blocking ------------------------------ */
+export const isBlocked = (me, them) => list(load().blocked, me).includes(them)
+
+export function blockUser(me, them) {
+  const graph = load()
+  if (!list(graph.blocked, me).includes(them)) graph.blocked[me] = [...list(graph.blocked, me), them]
+  // Blocking severs every relationship in both directions.
+  graph.follows[me] = list(graph.follows, me).filter((id) => id !== them)
+  graph.follows[them] = list(graph.follows, them).filter((id) => id !== me)
+  graph.friends[me] = list(graph.friends, me).filter((id) => id !== them)
+  graph.friends[them] = list(graph.friends, them).filter((id) => id !== me)
+  graph.friendRequests[me] = list(graph.friendRequests, me).filter((id) => id !== them)
+  graph.friendRequests[them] = list(graph.friendRequests, them).filter((id) => id !== me)
+  save()
+  syncToBackend(() => api.post('/social/block', { target_user_id: them }))
+}
+
+export function unblockUser(me, them) {
+  const graph = load()
+  graph.blocked[me] = list(graph.blocked, me).filter((id) => id !== them)
+  save()
+  syncToBackend(() => api.delete(`/social/block/${them}`))
 }
 
 /* -------------------------------- Messages ------------------------------ */

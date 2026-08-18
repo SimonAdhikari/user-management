@@ -359,6 +359,8 @@ button, input, select { font: inherit; }
 .page-header-row h2 { margin-top: .35rem; font-size: clamp(2rem, 4vw, 2.65rem); letter-spacing: -.055em; }
 .btn-secondary { background: rgba(255,255,255,.06); border: 1px solid var(--card-border); }
 .btn-secondary:hover { background: rgba(255,255,255,.12); box-shadow: none; }
+.btn-danger { background: rgba(244,63,94,.14); border: 1px solid rgba(244,63,94,.45); color: #fb7185; }
+.btn-danger:hover { background: rgba(244,63,94,.26); box-shadow: none; }
 .btn-wide { width: 100%; min-height: 47px; }
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

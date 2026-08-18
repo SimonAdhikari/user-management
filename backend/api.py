@@ -12,7 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from config import Settings
-from exceptions import AuthenticationError, PostNotFoundError, TwoFactorRequiredError, UserManagementError
+from exceptions import AuthenticationError, PostNotFoundError, TwoFactorRequiredError, UserManagementError, UserNotFoundError
 from services import UserManager
 from utilities import RateLimiter, SessionStore
 
@@ -329,6 +329,118 @@ def identify_user(user_id: str, _: object = Depends(require_roles("Administrator
     try:
         return manager.identify_user(user_id)
     except UserNotFoundError as error:
+        raise api_error(error, status.HTTP_404_NOT_FOUND)
+
+
+# ============================================================================
+# SOCIAL FEATURES (Follow, Friends, Block)
+# ============================================================================
+
+@app.post("/social/follow", tags=["social"])
+def follow_user(request: FollowRequest, user=Depends(current_user)):
+    """Follow another user."""
+    try:
+        manager.follow_user(user.user_id, request.target_user_id)
+        return {"message": "Successfully followed user."}
+    except (UserManagementError, ValueError) as error:
+        raise api_error(error)
+
+
+@app.delete("/social/follow/{target_user_id}", tags=["social"])
+def unfollow_user(target_user_id: str, user=Depends(current_user)):
+    """Unfollow a user."""
+    try:
+        manager.unfollow_user(user.user_id, target_user_id)
+        return {"message": "Successfully unfollowed user."}
+    except (UserManagementError, ValueError) as error:
+        raise api_error(error)
+
+
+@app.post("/social/friend-request", tags=["social"])
+def send_friend_request(request: FriendRequestAction, user=Depends(current_user)):
+    """Send a friend request to another user."""
+    try:
+        manager.send_friend_request(user.user_id, request.target_user_id)
+        return {"message": "Friend request sent."}
+    except (UserManagementError, ValueError) as error:
+        raise api_error(error)
+
+
+@app.post("/social/friend-request/accept", tags=["social"])
+def accept_friend_request(request: FriendRequestAction, user=Depends(current_user)):
+    """Accept a friend request."""
+    try:
+        manager.accept_friend_request(user.user_id, request.target_user_id)
+        return {"message": "Friend request accepted. You are now friends!"}
+    except (UserManagementError, ValueError) as error:
+        raise api_error(error)
+
+
+@app.post("/social/friend-request/decline", tags=["social"])
+def decline_friend_request(request: FriendRequestAction, user=Depends(current_user)):
+    """Decline a friend request."""
+    try:
+        manager.decline_friend_request(user.user_id, request.target_user_id)
+        return {"message": "Friend request declined."}
+    except (UserManagementError, ValueError) as error:
+        raise api_error(error)
+
+
+@app.delete("/social/friend-request/{target_user_id}", tags=["social"])
+def cancel_friend_request(target_user_id: str, user=Depends(current_user)):
+    """Cancel a sent friend request."""
+    try:
+        manager.cancel_friend_request(user.user_id, target_user_id)
+        return {"message": "Friend request cancelled."}
+    except (UserManagementError, ValueError) as error:
+        raise api_error(error)
+
+
+@app.delete("/social/friend/{target_user_id}", tags=["social"])
+def unfriend_user(target_user_id: str, user=Depends(current_user)):
+    """Remove a friend (mutual unfriend)."""
+    try:
+        manager.unfriend_user(user.user_id, target_user_id)
+        return {"message": "Successfully unfriended user."}
+    except (UserManagementError, ValueError) as error:
+        raise api_error(error)
+
+
+@app.post("/social/block", tags=["social"])
+def block_user(request: BlockRequest, user=Depends(current_user)):
+    """Block a user."""
+    try:
+        manager.block_user(user.user_id, request.target_user_id)
+        return {"message": "User blocked."}
+    except (UserManagementError, ValueError) as error:
+        raise api_error(error)
+
+
+@app.delete("/social/block/{target_user_id}", tags=["social"])
+def unblock_user(target_user_id: str, user=Depends(current_user)):
+    """Unblock a user."""
+    try:
+        manager.unblock_user(user.user_id, target_user_id)
+        return {"message": "User unblocked."}
+    except (UserManagementError, ValueError) as error:
+        raise api_error(error)
+
+
+@app.get("/social/info", tags=["social"])
+def get_social_info(user=Depends(current_user)):
+    """Get social information for the current user."""
+    try:
+        return manager.get_social_info(user.user_id)
+    except UserManagementError as error:
+        raise api_error(error)
+
+
+@app.get("/social/profile/{target_user_id}", tags=["social"])
+def get_user_profile(target_user_id: str, user=Depends(current_user)):
+    """Get a user's profile with social context from current user's perspective."""
+    try:
+        return manager.get_user_profile(user.user_id, target_user_id)
+    except UserManagementError as error:
         raise api_error(error, status.HTTP_404_NOT_FOUND)
 
 
