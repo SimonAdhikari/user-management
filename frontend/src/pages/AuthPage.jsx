@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowRight, KeyRound, LockKeyhole, ShieldCheck, Sparkles, UserPlus } from 'lucide-react'
+import { ArrowRight, KeyRound, LockKeyhole, MailCheck, ShieldCheck, Sparkles, UserPlus } from 'lucide-react'
 import { api, errorMessage } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import BrandLogo from '../components/BrandLogo'
@@ -12,6 +12,10 @@ export default function AuthPage() {
   const [loginData, setLoginData] = useState({ email: '', password: '' })
   const [setupData, setSetupData] = useState(emptySetup)
   const [signupData, setSignupData] = useState(emptySignup)
+  const [verifyStep, setVerifyStep] = useState(false)
+  const [verifyCode, setVerifyCode] = useState('')
+  const [devCode, setDevCode] = useState('')
+  const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
@@ -37,22 +41,44 @@ export default function AuthPage() {
   }
 
   const submitSignup = async (event) => {
-    event.preventDefault(); setLoading(true); setError('')
+    event.preventDefault(); setLoading(true); setError(''); setNotice('')
     try {
       const payload = { ...signupData, role: 'User' }
-      await api.post('/auth/signup', payload)
+      const { data } = await api.post('/auth/signup', payload)
+      setVerifyStep(true)
+      setDevCode(data.dev_code || '')
+      setNotice(data.message || 'Check your email for the verification code.')
+    } catch (err) { setError(errorMessage(err)) }
+    finally { setLoading(false) }
+  }
+
+  const submitVerify = async (event) => {
+    event.preventDefault(); setLoading(true); setError('')
+    try {
+      await api.post('/auth/signup/verify', { email: signupData.email, code: verifyCode })
       setMode('login')
       setLoginData({ email: signupData.email, password: signupData.password })
       setSignupData(emptySignup)
-      setError('')
-      alert('Account created! Please sign in with your email and password.')
+      setVerifyStep(false); setVerifyCode(''); setDevCode(''); setNotice('')
+      alert('Email verified and account created! Please sign in.')
+    } catch (err) { setError(errorMessage(err)) }
+    finally { setLoading(false) }
+  }
+
+  const resendCode = async () => {
+    setLoading(true); setError('')
+    try {
+      const { data } = await api.post('/auth/signup/resend', { email: signupData.email })
+      setDevCode(data.dev_code || '')
+      setNotice(data.message || 'A new code has been sent to your email.')
     } catch (err) { setError(errorMessage(err)) }
     finally { setLoading(false) }
   }
 
   const change = (setter, data) => (event) => setter({ ...data, [event.target.name]: event.target.value })
   const isLogin = mode === 'login'
-  const isSignup = mode === 'signup'
+  const isSignup = mode === 'signup' && !verifyStep
+  const isVerify = mode === 'signup' && verifyStep
 
   return <main className="auth-shell">
     <section className="auth-brand">
@@ -70,24 +96,30 @@ export default function AuthPage() {
       <div className="auth-card">
         <div className="auth-card-heading">
           <BrandLogo size={44} className="mini-logo" />
-          <h2>{isLogin ? 'Welcome back' : isSignup ? 'Create your account' : 'First-time setup'}</h2>
-          <p>{isLogin ? 'Sign in to continue to your feed.' : isSignup ? 'Join the platform — create a free account.' : 'Create the first administrator account.'}</p>
+          <h2>{isLogin ? 'Welcome back' : isVerify ? 'Verify your email' : isSignup ? 'Create your account' : 'First-time setup'}</h2>
+          <p>{isLogin ? 'Sign in to continue to your feed.' : isVerify ? `We sent a 6-digit code to ${signupData.email}.` : isSignup ? 'Join the platform — create a free account.' : 'Create the first administrator account.'}</p>
         </div>
         <div className="auth-tabs">
-          <button className={isLogin ? 'selected' : ''} onClick={() => { setMode('login'); setError('') }}>Sign in</button>
-          <button className={isSignup ? 'selected' : ''} onClick={() => { setMode('signup'); setError('') }}>Sign up</button>
-          <button className={mode === 'setup' ? 'selected' : ''} onClick={() => { setMode('setup'); setError('') }}>First-time setup</button>
+          <button className={isLogin ? 'selected' : ''} onClick={() => { setMode('login'); setVerifyStep(false); setError(''); setNotice('') }}>Sign in</button>
+          <button className={mode === 'signup' ? 'selected' : ''} onClick={() => { setMode('signup'); setError(''); setNotice('') }}>Sign up</button>
+          <button className={mode === 'setup' ? 'selected' : ''} onClick={() => { setMode('setup'); setVerifyStep(false); setError(''); setNotice('') }}>First-time setup</button>
         </div>
         {error && <div className="alert alert-error" role="alert">{error}</div>}
+        {notice && !error && <div className="alert alert-info" role="status">{notice}{devCode && <><br /><strong>Dev code: {devCode}</strong> (email delivery not configured)</>}</div>}
         {isLogin ? <form onSubmit={submitLogin} className="auth-form">
           <label>Email<input autoFocus name="email" type="email" value={loginData.email} onChange={change(setLoginData, loginData)} placeholder="you@example.com" required /></label>
           <label>Password<input name="password" type="password" value={loginData.password} onChange={change(setLoginData, loginData)} placeholder="Your password" required /></label>
           <button className="btn btn-wide" disabled={loading}>{loading ? 'Signing in…' : <>Sign in <ArrowRight size={17} /></>}</button>
+        </form> : isVerify ? <form onSubmit={submitVerify} className="auth-form">
+          <label>Verification code <small>6 digits sent to your email</small><input autoFocus name="code" value={verifyCode} onChange={(event) => setVerifyCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="123456" inputMode="numeric" pattern="\d{6}" required /></label>
+          <button className="btn btn-wide" disabled={loading || verifyCode.length !== 6}>{loading ? 'Verifying…' : <><MailCheck size={17} /> Verify & create account</>}</button>
+          <button type="button" className="btn btn-wide btn-secondary" disabled={loading} onClick={resendCode}>Resend code</button>
+          <button type="button" className="btn btn-wide btn-secondary" onClick={() => { setVerifyStep(false); setVerifyCode(''); setDevCode(''); setNotice('') }}>Back to sign up</button>
         </form> : isSignup ? <form onSubmit={submitSignup} className="auth-form">
           <label>Full name<input autoFocus name="name" value={signupData.name} onChange={change(setSignupData, signupData)} placeholder="Your name" required /></label>
-          <label>Email<input name="email" type="email" value={signupData.email} onChange={change(setSignupData, signupData)} placeholder="you@example.com" required /></label>
+          <label>Email <small>Must be a real address — we send a verification code</small><input name="email" type="email" value={signupData.email} onChange={change(setSignupData, signupData)} placeholder="you@example.com" required /></label>
           <label>Password <small>10+ chars, upper/lowercase, digit & symbol</small><input name="password" type="password" value={signupData.password} onChange={change(setSignupData, signupData)} required /></label>
-          <button className="btn btn-wide" disabled={loading}>{loading ? 'Creating account…' : <><UserPlus size={17} /> Create account</>}</button>
+          <button className="btn btn-wide" disabled={loading}>{loading ? 'Sending verification code…' : <><UserPlus size={17} /> Continue</>}</button>
         </form> : <form onSubmit={submitSetup} className="auth-form">
           <label>Full name<input autoFocus name="name" value={setupData.name} onChange={change(setSetupData, setupData)} required /></label>
           <label>Email<input name="email" type="email" value={setupData.email} onChange={change(setSetupData, setupData)} required /></label>

@@ -13,14 +13,18 @@ from pydantic import BaseModel, Field
 
 from config import Settings
 from exceptions import AuthenticationError, PostNotFoundError, TwoFactorRequiredError, UserManagementError, UserNotFoundError
-from services import UserManager
-from utilities import RateLimiter, SessionStore
+from services import UserManager, VerificationManager
+from utilities import EmailSender, EmailVerifier, RateLimiter, SessionStore
 
 settings = Settings.load()
 settings.data_dir.mkdir(parents=True, exist_ok=True)
 manager = UserManager(settings.data_dir / "users.json", settings.data_dir / "activity.log")
+verifications = VerificationManager()
+email_sender = EmailSender(settings.smtp_host, settings.smtp_port, settings.smtp_username,
+                           settings.smtp_password, settings.smtp_sender, settings.smtp_tls)
 sessions = SessionStore(settings.session_minutes)
 login_limiter = RateLimiter(limit=5, window_seconds=60)
+signup_limiter = RateLimiter(limit=3, window_seconds=300)
 bearer = HTTPBearer(auto_error=False)
 STORAGE_SERVER_URL = os.getenv("STORAGE_SERVER_URL", "http://127.0.0.1:8001")
 
@@ -59,6 +63,15 @@ class LoginRequest(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=1, max_length=128)
     totp_code: str | None = Field(default=None, min_length=6, max_length=6)
+
+
+class SignupVerifyRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    code: str = Field(min_length=6, max_length=6)
+
+
+class SignupResendRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
 
 
 class TwoFactorConfirmRequest(BaseModel):
@@ -189,17 +202,80 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/auth/signup", status_code=status.HTTP_201_CREATED, tags=["authentication"])
-def signup(request: UserCreateRequest):
-    """Public self-service registration. New accounts start with the 'User' role."""
+def _deliver_verification_code(email: str, code: str) -> dict:
+    """Send the code by email; in development without SMTP, surface it inline."""
+    if email_sender.configured:
+        try:
+            email_sender.send_verification_code(email, code)
+            return {"message": "A verification code has been sent to your email. Enter it to finish creating your account."}
+        except Exception as error:
+            manager.logger.log("SIGNUP_EMAIL_FAILED", email, str(error))
+            raise api_error(Exception("Could not send the verification email. Try again later."),
+                            status.HTTP_502_BAD_GATEWAY)
+    if settings.environment == "development":
+        # No SMTP relay configured — show the code so local testing still works.
+        return {"message": "Email delivery is not configured. Use this code to verify.", "dev_code": code}
+    raise api_error(Exception("Email delivery is not configured on this server."), status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+@app.post("/auth/signup", tags=["authentication"])
+def signup(http_request: Request, request: UserCreateRequest):
+    """Public self-service registration. Only real, reachable email addresses
+    are accepted: disposable providers, reserved domains, and domains without
+    mail records are rejected. The account is created only after the user
+    enters the one-time code emailed to them (/auth/signup/verify)."""
     if request.role != "User":
         raise api_error(Exception("Self-service accounts are created with the standard User role."), status.HTTP_400_BAD_REQUEST)
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    if not signup_limiter.allowed(client_ip):
+        manager.logger.log("SIGNUP_RATE_LIMITED", request.email, f"ip={client_ip}")
+        raise api_error(Exception("Too many signup attempts. Try again later."), status.HTTP_429_TOO_MANY_REQUESTS)
+    email = request.email.strip().lower()
+    # Reject fake / disposable / undeliverable addresses before anything else.
     try:
-        user = manager.create_user(**request_data(request))
-        manager.logger.log("USER_SIGNED_UP", user.user_id, f"role={user.role}")
-        return {"message": "Account created. You can sign in now.", "user": user.to_dict()}
+        EmailVerifier.verify_authenticity(email)
+    except UserManagementError as error:
+        manager.logger.log("SIGNUP_FAKE_EMAIL_REJECTED", email)
+        raise api_error(error)
+    # Reject duplicates early so users get a clear message.
+    if any(u.email == email for u in manager.users):
+        raise api_error(Exception("A user with this email already exists."), status.HTTP_409_CONFLICT)
+    code = verifications.start(email, request_data(request))
+    manager.logger.log("SIGNUP_VERIFICATION_STARTED", email)
+    return _deliver_verification_code(email, code)
+
+
+@app.post("/auth/signup/resend", tags=["authentication"])
+def signup_resend(http_request: Request, request: SignupResendRequest):
+    """Resend the verification code for a pending signup."""
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    if not signup_limiter.allowed(client_ip):
+        raise api_error(Exception("Too many attempts. Try again later."), status.HTTP_429_TOO_MANY_REQUESTS)
+    email = request.email.strip().lower()
+    try:
+        code = verifications.restart_code(email)
+    except ValueError as error:
+        raise api_error(error)
+    manager.logger.log("SIGNUP_CODE_RESENT", email)
+    return _deliver_verification_code(email, code)
+
+
+@app.post("/auth/signup/verify", status_code=status.HTTP_201_CREATED, tags=["authentication"])
+def signup_verify(request: SignupVerifyRequest):
+    """Finish registration: validate the emailed code, then create the account."""
+    email = request.email.strip().lower()
+    try:
+        payload = verifications.confirm(email, request.code.strip())
+    except ValueError as error:
+        manager.logger.log("SIGNUP_VERIFICATION_FAILED", email)
+        raise api_error(error, status.HTTP_400_BAD_REQUEST)
+    try:
+        user = manager.create_user(**payload)
     except (UserManagementError, ValueError) as error:
         raise api_error(error)
+    verifications.complete(email)
+    manager.logger.log("USER_SIGNED_UP", user.user_id, f"role={user.role}")
+    return {"message": "Email verified. Account created. You can sign in now.", "user": user.to_dict()}
 
 
 @app.post("/setup/administrator", status_code=status.HTTP_201_CREATED, tags=["setup"])

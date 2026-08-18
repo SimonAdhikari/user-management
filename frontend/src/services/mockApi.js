@@ -187,6 +187,33 @@ export const mockApi = {
     if (url === '/setup/administrator') {
       return fail('Offline mode already includes a demo administrator account.', 409)
     }
+    // ---- Offline signup with email verification (demo code 123456) ----
+    if (url === '/auth/signup') {
+      const email = (data.email || '').trim().toLowerCase()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Enter a valid email address.', 400)
+      const domain = email.split('@')[1]
+      const disposable = ['mailinator.com', 'tempmail.com', 'temp-mail.org', 'yopmail.com', 'guerrillamail.com', '10minutemail.com', 'trashmail.com', 'fakeinbox.com', 'maildrop.cc', 'getnada.com']
+      if (disposable.includes(domain)) return fail('Disposable or temporary email addresses are not allowed. Use a real email address.', 400)
+      if (['example.com', 'example.org', 'example.net'].includes(domain) || /\.(test|invalid|localhost|local)$/.test(domain)) {
+        return fail('This email domain cannot receive mail. Use a real email address.', 400)
+      }
+      if (users().some((user) => user.email === email)) return fail('A user with this email already exists.', 409)
+      localStorage.setItem('sums_offline_pending_signup', JSON.stringify({ ...data, email }))
+      return response({ message: 'Offline demo: use verification code 123456.', dev_code: '123456' })
+    }
+    if (url === '/auth/signup/resend') {
+      const pending = JSON.parse(localStorage.getItem('sums_offline_pending_signup') || 'null')
+      if (!pending) return fail('No pending verification for this email. Please sign up first.', 400)
+      return response({ message: 'Offline demo: use verification code 123456.', dev_code: '123456' })
+    }
+    if (url === '/auth/signup/verify') {
+      const pending = JSON.parse(localStorage.getItem('sums_offline_pending_signup') || 'null')
+      if (!pending) return fail('No pending verification for this email. Please sign up first.', 400)
+      if ((pending.email || '') !== (data.email || '').trim().toLowerCase()) return fail('No pending verification for this email. Please sign up first.', 400)
+      if (data.code !== '123456') return fail('Incorrect verification code. Offline demo code is 123456.', 400)
+      localStorage.removeItem('sums_offline_pending_signup')
+      return createUser({ ...pending, role: pending.role || 'User' })
+    }
     if (url === '/users') return createUser(data)
     if (url === '/2fa/setup') return response({ secret: 'OFFLINE-DEMO-SECRET', provisioning_uri: 'otpauth://totp/SUMS:offline' })
     if (url === '/2fa/confirm') {

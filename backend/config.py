@@ -20,6 +20,12 @@ class Settings:
     environment: str
     bootstrap_key: str
     max_request_bytes: int
+    smtp_host: str
+    smtp_port: int
+    smtp_username: str
+    smtp_password: str
+    smtp_sender: str
+    smtp_tls: bool
 
     @classmethod
     def load(cls) -> "Settings":
@@ -48,4 +54,13 @@ class Settings:
                 origins.append("*")
             if "*" not in hosts:
                 hosts.append("*")
-        return cls(base, origins, hosts, minutes, secure_cookie, environment, bootstrap_key, request_bytes)
+        smtp_host = os.getenv("SUMS_SMTP_HOST", "").strip()
+        smtp_port = int(os.getenv("SUMS_SMTP_PORT", "587"))
+        if not 1 <= smtp_port <= 65535:
+            raise ValueError("SUMS_SMTP_PORT must be between 1 and 65535.")
+        smtp_username = os.getenv("SUMS_SMTP_USERNAME", "")
+        smtp_password = os.getenv("SUMS_SMTP_PASSWORD", "")
+        smtp_sender = os.getenv("SUMS_SMTP_SENDER", "").strip()
+        smtp_tls = os.getenv("SUMS_SMTP_TLS", "true").lower() == "true"
+        return cls(base, origins, hosts, minutes, secure_cookie, environment, bootstrap_key, request_bytes,
+                   smtp_host, smtp_port, smtp_username, smtp_password, smtp_sender, smtp_tls)

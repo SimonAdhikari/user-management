@@ -253,6 +253,12 @@ body {
   color: #fca5a5;
 }
 
+.alert-info {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: #93c5fd;
+}
+
 .alert-success {
   background: rgba(16, 185, 129, 0.1);
   border: 1px solid rgba(16, 185, 129, 0.2);
@@ -889,6 +895,7 @@ body { background: #f0f2f5; background-image: none; color: #050505; }
 .form-control::placeholder { color: #90949c; }
 .alert-error { background: #ffebe9; border-color: #ffc9c9; color: #b91c1c; }
 .alert-success { background: #e7f7ef; border-color: #b7e4c7; color: #0a7d43; }
+.alert-info { background: #e7f0fd; border-color: #bcd3f7; color: #145dbf; }
 .eyebrow { color: #1877f2; }
 .icon-button { color: #65676b; }
 .icon-button:hover { background: var(--fb-hover); color: #050505; }
