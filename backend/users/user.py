@@ -135,6 +135,93 @@ class User:
         self._totp_secret = None
         self._totp_enabled = False
 
+    # Social features methods
+    def follow(self, target_user_id: str) -> None:
+        """Follow another user."""
+        if target_user_id == self._user_id:
+            raise ValueError("Cannot follow yourself.")
+        if target_user_id in self._blocked:
+            raise ValueError("Cannot follow a user you have blocked.")
+        self._following.add(target_user_id)
+
+    def unfollow(self, target_user_id: str) -> None:
+        """Unfollow a user."""
+        self._following.discard(target_user_id)
+        # If they were friends, remove friendship
+        if target_user_id in self._friends:
+            self._friends.discard(target_user_id)
+
+    def send_friend_request(self, target_user_id: str) -> None:
+        """Send a friend request to another user."""
+        if target_user_id == self._user_id:
+            raise ValueError("Cannot send friend request to yourself.")
+        if target_user_id in self._blocked:
+            raise ValueError("Cannot send friend request to a user you have blocked.")
+        if target_user_id in self._friends:
+            raise ValueError("Already friends with this user.")
+        if target_user_id in self._friend_requests_sent:
+            raise ValueError("Friend request already sent.")
+        if target_user_id in self._friend_requests_received:
+            raise ValueError("This user has already sent you a friend request. Accept it instead.")
+        self._friend_requests_sent.add(target_user_id)
+
+    def accept_friend_request(self, requester_user_id: str) -> None:
+        """Accept a friend request."""
+        if requester_user_id not in self._friend_requests_received:
+            raise ValueError("No friend request from this user.")
+        self._friend_requests_received.discard(requester_user_id)
+        self._friends.add(requester_user_id)
+        self._following.add(requester_user_id)  # Auto-follow when becoming friends
+
+    def decline_friend_request(self, requester_user_id: str) -> None:
+        """Decline a friend request."""
+        self._friend_requests_received.discard(requester_user_id)
+
+    def cancel_friend_request(self, target_user_id: str) -> None:
+        """Cancel a sent friend request."""
+        self._friend_requests_sent.discard(target_user_id)
+
+    def unfriend(self, target_user_id: str) -> None:
+        """Remove a friend (mutual unfriend)."""
+        self._friends.discard(target_user_id)
+        self._following.discard(target_user_id)
+
+    def block(self, target_user_id: str) -> None:
+        """Block a user."""
+        if target_user_id == self._user_id:
+            raise ValueError("Cannot block yourself.")
+        self._blocked.add(target_user_id)
+        # Remove all relationships
+        self._following.discard(target_user_id)
+        self._followers.discard(target_user_id)
+        self._friends.discard(target_user_id)
+        self._friend_requests_sent.discard(target_user_id)
+        self._friend_requests_received.discard(target_user_id)
+
+    def unblock(self, target_user_id: str) -> None:
+        """Unblock a user."""
+        self._blocked.discard(target_user_id)
+
+    def is_following(self, target_user_id: str) -> bool:
+        """Check if following a user."""
+        return target_user_id in self._following
+
+    def is_friend(self, target_user_id: str) -> bool:
+        """Check if friends with a user."""
+        return target_user_id in self._friends
+
+    def is_blocked(self, target_user_id: str) -> bool:
+        """Check if a user is blocked."""
+        return target_user_id in self._blocked
+
+    def has_pending_friend_request(self, target_user_id: str) -> bool:
+        """Check if there's a pending friend request from this user."""
+        return target_user_id in self._friend_requests_received
+
+    def has_sent_friend_request(self, target_user_id: str) -> bool:
+        """Check if this user has sent a friend request to target."""
+        return target_user_id in self._friend_requests_sent
+
     def verify_totp(self, code: str) -> bool:
         from utilities import TotpService
         return bool(self._totp_enabled and self._totp_secret
@@ -173,13 +260,22 @@ class User:
                 "role": self.role, "is_locked": self.is_locked,
                 "failed_login_attempts": self.failed_login_attempts,
                 "kyc_status": self._kyc_status, "kyc_document_type": self._kyc_document_type,
-                "totp_enabled": self._totp_enabled}
+                "totp_enabled": self._totp_enabled,
+                "following_count": len(self._following),
+                "followers_count": len(self._followers),
+                "friends_count": len(self._friends)}
 
     def to_storage_dict(self) -> dict:
         data = self.to_dict()
         data.update({"password_hash": self.__password_hash, "salt": self.__salt,
                      "kyc_document_number": self._kyc_document_number,
-                     "totp_secret": self._totp_secret})
+                     "totp_secret": self._totp_secret,
+                     "following": list(self._following),
+                     "followers": list(self._followers),
+                     "friends": list(self._friends),
+                     "blocked": list(self._blocked),
+                     "friend_requests_sent": list(self._friend_requests_sent),
+                     "friend_requests_received": list(self._friend_requests_received)})
         return data
 
     @classmethod
@@ -200,6 +296,13 @@ class User:
         obj._kyc_document_number = data.get("kyc_document_number")
         obj._totp_secret = data.get("totp_secret")
         obj._totp_enabled = data.get("totp_enabled", False)
+        # Social features
+        obj._following = set(data.get("following", []))
+        obj._followers = set(data.get("followers", []))
+        obj._friends = set(data.get("friends", []))
+        obj._blocked = set(data.get("blocked", []))
+        obj._friend_requests_sent = set(data.get("friend_requests_sent", []))
+        obj._friend_requests_received = set(data.get("friend_requests_received", []))
         return obj
 
     def __str__(self) -> str:
