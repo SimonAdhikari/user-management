@@ -1,7 +1,9 @@
 @echo off
-REM Social Hub - One-click launcher with public HTTPS domain via Cloudflare Tunnel
+REM Social Hub - One-click launcher with PERMANENT public HTTPS domain via Cloudflare Tunnel
 REM Starts backend (8000), storage server (8001), frontend preview (4173), 
-REM and a Cloudflare quick tunnel to expose the app at a public https://...trycloudflare.com URL.
+REM and a Cloudflare NAMED tunnel exposing the app at the permanent URL:
+REM https://social.simonadhikari.com.np
+REM (Tunnel ID: 15c12677-fff9-4e8a-a752-a8f16ce9873f)
 
 title Social Hub - Public Domain Launcher
 color 0B
@@ -48,8 +50,8 @@ echo.
 echo Waiting for servers to start...
 timeout /t 5 >nul
 
-echo Starting Cloudflare Tunnel...
-start "Cloudflare Tunnel" "%CLOUDFLARED%" tunnel --url http://127.0.0.1:4173
+echo Starting Cloudflare Named Tunnel (social-hub)...
+start "Cloudflare Tunnel" "%CLOUDFLARED%" tunnel run social-hub
 
 echo.
 echo ============================================
@@ -61,8 +63,10 @@ echo   Frontend:  http://127.0.0.1:4173
 echo   Backend:   http://127.0.0.1:8000
 echo   Storage:   http://127.0.0.1:8001
 echo.
-echo Waiting for tunnel URL to appear...
-echo Check the "Cloudflare Tunnel" window for the public https://...trycloudflare.com URL
+echo PERMANENT PUBLIC DOMAIN (never changes):
+echo   https://social.simonadhikari.com.np
+echo.
+echo Share this URL with anyone - it works everywhere, forever!
 echo.
 echo Test accounts:
 echo   Online:  demo@test.com / Demo@Pass123!

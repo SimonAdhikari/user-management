@@ -1,11 +1,14 @@
 <# 
 .SYNOPSIS
-    Social Hub - One-click launcher with public HTTPS domain via Cloudflare Tunnel
+    Social Hub - One-click launcher with PERMANENT public HTTPS domain via Cloudflare Tunnel
 .DESCRIPTION
     Starts backend (8000), storage server (8001), frontend preview (4173), 
-    and a Cloudflare quick tunnel to expose the app at a public https://...trycloudflare.com URL.
+    and a Cloudflare NAMED tunnel exposing the app at the permanent URL:
+    https://social.simonadhikari.com.np
+    (Tunnel ID: 15c12677-fff9-4e8a-a752-a8f16ce9873f)
 .NOTES
     Requires: Python 3.11+, cloudflared.exe in %USERPROFILE%, npm build already run.
+    One-time setup already done: cloudflared tunnel login + tunnel create + route dns.
 #>
 
 param(
@@ -15,6 +18,7 @@ param(
 $ErrorActionPreference = "Stop"
 $projectRoot = "E:\oop\project"
 $cloudflared = "$env:USERPROFILE\cloudflared.exe"
+$permanentUrl = "https://social.simonadhikari.com.np"
 
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "  Social Hub - Public Domain Launcher" -ForegroundColor Cyan
@@ -70,21 +74,20 @@ $tunnelUrl = $null
 $tunnelProc = $null
 
 if (-not $NoTunnel) {
-    # Start Cloudflare Tunnel
-    Write-Host "Starting Cloudflare Tunnel..." -ForegroundColor Green
+    # Start Cloudflare NAMED tunnel (permanent URL, never changes)
+    Write-Host "Starting Cloudflare Named Tunnel (social-hub)..." -ForegroundColor Green
     $tunnelProc = Start-Process -FilePath $cloudflared `
-        -ArgumentList "tunnel", "--url", "http://127.0.0.1:4173" `
+        -ArgumentList "tunnel", "run", "social-hub" `
         -RedirectStandardOutput "$env:TEMP\cf_tunnel_out.txt" `
         -RedirectStandardError "$env:TEMP\cf_tunnel_err.txt" `
         -PassThru
 
-    # Wait for tunnel URL to appear in output
-    Write-Host "Waiting for tunnel URL..." -ForegroundColor Yellow
+    # Wait for the tunnel connection to be registered
+    Write-Host "Waiting for tunnel to connect..." -ForegroundColor Yellow
     for ($i = 0; $i -lt 30; $i++) {
         Start-Sleep -Seconds 1
-        $output = Get-Content "$env:TEMP\cf_tunnel_out.txt" -ErrorAction SilentlyContinue -Raw
-        if ($output -match 'https://[a-z0-9-]+\.trycloudflare\.com') {
-            $tunnelUrl = $matches[0]
+        $output = Get-Content "$env:TEMP\cf_tunnel_out.txt", "$env:TEMP\cf_tunnel_err.txt" -ErrorAction SilentlyContinue -Raw
+        if ($output -match 'Registered tunnel connection') {
             break
         }
     }
@@ -101,13 +104,13 @@ Write-Host "  Backend:   http://127.0.0.1:8000" -ForegroundColor Gray
 Write-Host "  Storage:   http://127.0.0.1:8001" -ForegroundColor Gray
 Write-Host ""
 
-if ($tunnelUrl) {
-    Write-Host "PUBLIC DOMAIN (works in ANY browser on ANY device):" -ForegroundColor Green
-    Write-Host "  $tunnelUrl" -ForegroundColor Yellow
+if (-not $NoTunnel) {
+    Write-Host "PERMANENT PUBLIC DOMAIN (works in ANY browser on ANY device):" -ForegroundColor Green
+    Write-Host "  $permanentUrl" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Share this URL with anyone - it works everywhere!" -ForegroundColor Cyan
+    Write-Host "This URL NEVER changes - share it everywhere!" -ForegroundColor Cyan
 } else {
-    Write-Host "Tunnel not ready yet. Check $env:TEMP\cf_tunnel_out.txt" -ForegroundColor Yellow
+    Write-Host "Tunnel skipped (-NoTunnel). Local access only." -ForegroundColor Yellow
 }
 
 Write-Host ""
