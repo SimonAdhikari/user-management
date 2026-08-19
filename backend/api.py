@@ -22,7 +22,7 @@ manager = UserManager(settings.data_dir / "users.json", settings.data_dir / "act
 verifications = VerificationManager()
 email_sender = EmailSender(settings.smtp_host, settings.smtp_port, settings.smtp_username,
                            settings.smtp_password, settings.smtp_sender, settings.smtp_tls)
-sessions = SessionStore(settings.session_minutes)
+sessions = SessionStore(settings.session_minutes, settings.data_dir / "sessions.json")
 login_limiter = RateLimiter(limit=5, window_seconds=60)
 signup_limiter = RateLimiter(limit=3, window_seconds=300)
 bearer = HTTPBearer(auto_error=False)
